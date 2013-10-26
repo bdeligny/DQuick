@@ -22,7 +22,7 @@ import std.c.string;
 
 version(unittest)
 {
-	class Item : dquick.script.i_item_binding.IItemBinding
+	class Item : DeclarativeItem, dquick.script.i_item_binding.IItemBinding
 	{
 		this()
 		{
@@ -128,7 +128,7 @@ version(unittest)
 				{
 					// Call metamethod to instanciate type
 					lua_pushstring(mLuaState, "__call");
-					lua_pushcfunction(mLuaState, cast(lua_CFunction)&createLuaBind!(dquick.script.item_binding.ItemBinding!(type)));
+					lua_pushcfunction(mLuaState, cast(lua_CFunction)&createLuaBind!(type));
 					lua_settable(mLuaState, -3);
 				}
 				lua_setmetatable(mLuaState, -2);
@@ -158,7 +158,6 @@ version(unittest)
 					throw new Exception(format("an object with id \"%s\" already exist\n", id));
 				mIdToDeclarativeItems[id] = cast(dquick.script.i_item_binding.IItemBinding)itemBinding;
 			}
-			itemBinding.creating = false;
 
 			setLuaGlobal(id, object);
 		}
@@ -196,7 +195,7 @@ version(unittest)
 			if (luaL_loadbuffer(luaState(), cast(const char*)text.ptr, text.length, filePath.toStringz()) != LUA_OK)
 			{
 				const char* error = lua_tostring(luaState(), -1);
-				writeln("DMLEngine.execute: error: " ~ to!(string)(error));
+				writeln("DMLEngineCore.execute: error: " ~ to!(string)(error));
 				lua_pop(luaState(), 1);
 				assert(false);
 
@@ -209,7 +208,7 @@ version(unittest)
 			if (lua_pcall(luaState(), 0, LUA_MULTRET, 0) != LUA_OK)
 			{
 				const char* error = lua_tostring(luaState(), -1);
-				writeln("DMLEngine.execute: error: " ~ to!(string)(error));
+				writeln("DMLEngineCore.execute: error: " ~ to!(string)(error));
 				lua_pop(luaState(), 1);
 				assert(false);
 
@@ -240,7 +239,7 @@ version(unittest)
 			if (lua_pcall(luaState(), 0, LUA_MULTRET, 0) != LUA_OK)
 			{
 				const char* error = lua_tostring(luaState(), -1);
-				writeln("DMLEngine.execute: error: " ~ to!(string)(error));
+				writeln("DMLEngineCore.execute: error: " ~ to!(string)(error));
 				lua_pop(luaState(), 1);
 				assert(false);
 
@@ -321,7 +320,7 @@ version(unittest)
 			try
 			{
 				const char* error = lua_tostring(L, 1);
-				writeln("[DMLEngine] " ~ to!(string)(error));
+				writeln("[DMLEngineCore] " ~ to!(string)(error));
 				lua_pop(L, 1);
 				assert(false);
 
@@ -359,10 +358,12 @@ version(unittest)
 
 				lua_pushstring(L, "__This");
 				lua_gettable(L, LUA_REGISTRYINDEX);
-				DMLEngine	dmlEngine = cast(DMLEngine)lua_touserdata(L, -1);
+				DMLEngineCore	dmlEngine = cast(DMLEngineCore)lua_touserdata(L, -1);
 				lua_pop(L, 1);
 
-				T	itemBinding = new T(dmlEngine);
+				T	itemBinding = new T();
+				itemBinding.dmlEngine = dmlEngine;
+				itemBinding.creating = true;
 
 				/* table is in the stack at index 't' */
 				lua_pushnil(L);  /* first key */
@@ -504,7 +505,7 @@ version(unittest)
 
 				lua_pushstring(L, "__This");
 				lua_gettable(L, LUA_REGISTRYINDEX);
-				DMLEngine	dmlEngine = cast(DMLEngine)lua_touserdata(L, -1);
+				DMLEngineCore	dmlEngine = cast(DMLEngineCore)lua_touserdata(L, -1);
 				lua_pop(L, 1);
 
 				void*	itemBindingPtr = *(cast(void**)lua_touserdata(L, 1));
@@ -594,7 +595,7 @@ version(unittest)
 
 				lua_pushstring(L, "__This");
 				lua_gettable(L, LUA_REGISTRYINDEX);
-				DMLEngine	dmlEngine = cast(DMLEngine)lua_touserdata(L, -1);
+				DMLEngineCore	dmlEngine = cast(DMLEngineCore)lua_touserdata(L, -1);
 				lua_pop(L, 1);
 
 				void*	itemBindingPtr = *(cast(void**)lua_touserdata(L, 1));
@@ -677,7 +678,7 @@ version(unittest)
 
 				lua_pushstring(L, "__This");
 				lua_gettable(L, LUA_REGISTRYINDEX);
-				DMLEngine	dmlEngine = cast(DMLEngine)lua_touserdata(L, -1);
+				DMLEngineCore	dmlEngine = cast(DMLEngineCore)lua_touserdata(L, -1);
 				lua_pop(L, 1);
 
 				void*	itemBindingPtr = *(cast(void**)lua_touserdata(L, 1));
@@ -685,7 +686,7 @@ version(unittest)
 
 				auto	iItemBinding = itemBindingPtr in dmlEngine.mVoidToDeclarativeItems;
 				assert(iItemBinding !is null);
-				dquick.script.item_binding.ItemBinding!T	itemBinding = cast(dquick.script.item_binding.ItemBinding!T)(*iItemBinding);
+				dquick.script.i_item_binding.ItemBinding	itemBinding = cast(dquick.script.i_item_binding.IItemBinding!T)(*iItemBinding);
 
 				int test = lua_gettop(L);
 				luaCallThisD!(methodName, T)(itemBinding.item, L, 1);

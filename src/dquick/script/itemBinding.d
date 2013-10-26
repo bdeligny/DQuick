@@ -14,6 +14,14 @@ import dquick.script.utils;
 static string	ITEM_BINDING()
 {
 	return "
+		dquick.script.dml_engine_core.DMLEngineCore	mDMLEngine;
+		dquick.script.dml_engine_core.DMLEngineCore	dmlEngine() {return mDMLEngine;};
+		void										dmlEngine(dquick.script.dml_engine_core.DMLEngineCore dmlEngine) {mDMLEngine = dmlEngine;}
+
+		bool	mCreating;
+		bool	creating() {return mCreating;}
+		void	creating(bool creating) {mCreating = creating;}
+
 		dquick.script.virtual_property_binding.VirtualPropertyBinding[string]	virtualProperties;
 
 		override void	executeBindings()
@@ -38,7 +46,6 @@ class ItemBinding(T) : dquick.script.i_item_binding.IItemBinding {
 	{
 		this.mDMLEngine = dmlEngine;
 		this.item = item;
-		creating = true;
 
 		foreach (member; __traits(allMembers, typeof(this)))
 		{
@@ -104,9 +111,6 @@ class ItemBinding(T) : dquick.script.i_item_binding.IItemBinding {
 
 		.destroy(item);
 	}
-
-	override dquick.script.dml_engine.DMLEngine	dmlEngine() {return mDMLEngine;};
-	dquick.script.dml_engine.DMLEngine	mDMLEngine;
 
 	T	item;
 	override DeclarativeItem	declarativeItem() {return item;}
@@ -330,4 +334,6 @@ class ItemBinding(T) : dquick.script.i_item_binding.IItemBinding {
 		return result;
 	}
 	mixin(genProperties!(T, dquick.script.dml_engine.DMLEngine.propertyTypes));
+	
+	mixin(ITEM_BINDING());
 }

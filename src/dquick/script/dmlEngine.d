@@ -664,8 +664,6 @@ private:
 			mIdToDeclarativeItems[id] = cast(dquick.script.i_item_binding.IItemBinding)itemBinding;
 		}
 
-		itemBinding.creating = false;
-
 		if (id != "")
 		{
 			valueToLua!T(mLuaState, itemBinding);
