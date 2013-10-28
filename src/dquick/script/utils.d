@@ -41,6 +41,15 @@ string	getSignalNameFromPropertyName(string propertyName)
 	return "on" ~ toUpperCamelCase(propertyName) ~ "Changed";
 }
 
+string	getPropertyNameFromPropertyDeclaration(string declaration)
+{
+	auto reg = ctRegex!("^(.+)Property$");
+	auto	m = match(declaration, reg);
+	if (m)
+		return m.captures[1];
+	return "";
+}
+
 string	getPropertyNameFromSignalName(string signalName)
 {
 	auto reg = ctRegex!("^on(.+)Changed$");
@@ -171,10 +180,10 @@ void	valueToLua(T)(lua_State* L, T value)
 		lua_newtable(L);
 
 		lua_pushstring(L, "__index");
-		lua_pushcfunction(L, cast(lua_CFunction)&dquick.script.dml_engine.indexLuaBind!T);
+		lua_pushcfunction(L, cast(lua_CFunction)&dquick.script.dml_engine_core.indexLuaBind!T);
 		lua_settable(L, -3);
 		lua_pushstring(L, "__newindex");
-		lua_pushcfunction(L, cast(lua_CFunction)&dquick.script.dml_engine.newindexLuaBind!T);
+		lua_pushcfunction(L, cast(lua_CFunction)&dquick.script.dml_engine_core.newindexLuaBind!T);
 		lua_settable(L, -3);
 
 		lua_setmetatable(L, -2);

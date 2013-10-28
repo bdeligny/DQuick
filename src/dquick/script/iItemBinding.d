@@ -6,8 +6,8 @@ import dquick.script.dml_engine_core;
 interface IItemBinding {
 	dquick.script.dml_engine_core.DMLEngineCore	dmlEngine();
 	void										dmlEngine(dquick.script.dml_engine_core.DMLEngineCore);
-	DeclarativeItem	declarativeItem();
 	void	executeBindings();
-	string	displayDependents();
+	static if (dquick.script.dml_engine.DMLEngine.showDebug)
+		string	displayDependents();
 	bool	creating();
 }

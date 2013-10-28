@@ -12,7 +12,7 @@ int main(string[] args)
 {
 	try
 	{
-		writeln("Current path: ", absolutePath("."));
+		/*writeln("Current path: ", absolutePath("."));
 		GuiApplication.instance().setApplicationArguments(args);
 		GuiApplication.instance().setApplicationDisplayName("DQuick - Images sample");
 
@@ -28,7 +28,8 @@ int main(string[] args)
 
 		mainWindow.show();
 
-		return GuiApplication.instance().execute();
+		return GuiApplication.instance().execute();*/
+		return 0;
 	}
 	catch (Throwable e)
 	{

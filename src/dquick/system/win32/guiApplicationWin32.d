@@ -101,14 +101,14 @@ version (Windows)
 		this()
 		{
 			mWindowId = mWindowsCounter++;
-			mScriptContext = new DMLEngine;
+			/*mScriptContext = new DMLEngine;
 			mScriptContext.create();
 			mScriptContext.addItemType!(DeclarativeItem, "Item")();
 			mScriptContext.addItemType!(GraphicItem, "GraphicItem")();
 			mScriptContext.addItemType!(ImageItem, "Image")();
 			mScriptContext.addItemType!(TextItem, "Text")();
 			mScriptContext.addItemType!(BorderImageItem, "BorderImage")();
-			mScriptContext.addItemType!(MouseAreaItem, "MouseArea")();
+			mScriptContext.addItemType!(MouseAreaItem, "MouseArea")();*/
 		}
 
 		~this()
