@@ -163,7 +163,7 @@ class PropertyBinding
 		writefln("creating = %d property = %s", itemBinding.creating, propertyName);
 		if (itemBinding.creating == false && slotLuaReference != -1)
 			itemBinding.dmlEngine.execute(slotLuaReference);
-		if (itemBinding.dmlEngine.initializationPhase == false)
+		if (itemBinding.dmlEngine && itemBinding.dmlEngine.initializationPhase == false)
 		{
 			static if (dquick.script.dml_engine.DMLEngine.showDebug)
 			{

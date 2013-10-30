@@ -41,6 +41,8 @@ class NativePropertyBinding(ValueType, ItemType, string PropertyName) : Property
 	{
 		super.valueToLua(L);
 		ValueType	value = __traits(getMember, cast(ItemType)(item), PropertyName);
+		static if (is(ValueType : dquick.script.i_item_binding.IItemBinding))
+			itemBinding.dmlEngine.addObjectBinding(value);
 		dquick.script.utils.valueToLua!ValueType(L, value);
 	}
 

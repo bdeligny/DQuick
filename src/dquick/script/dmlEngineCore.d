@@ -478,17 +478,21 @@ public:
 
 		addObjectBindingType!(T, "__dquick_reserved1");
 
-		object.dmlEngine = this;
-		object.creating = false;
-		mVoidToDeclarativeItems[cast(void*)(object)] = object;
-		if (id != "")
+		if (object !is null)
 		{
-			if (id in mIdToDeclarativeItems)
-				throw new Exception(format("an object with id \"%s\" already exist\n", id));
-			mIdToDeclarativeItems[id] = cast(dquick.script.i_item_binding.IItemBinding)object;
+			object.dmlEngine = this;
+			object.creating = false;
+			mVoidToDeclarativeItems[cast(void*)(object)] = object;
+			if (id != "")
+			{
+				if (id in mIdToDeclarativeItems)
+					throw new Exception(format("an object with id \"%s\" already exist\n", id));
+				mIdToDeclarativeItems[id] = cast(dquick.script.i_item_binding.IItemBinding)object;
+			}
 		}
 
-		setLuaGlobal(id, object);
+		if (id != "")
+			setLuaGlobal(id, object);
 	}
 
 	bool	isCreated()
@@ -852,6 +856,10 @@ extern(C)
 			lua_remove(L, 1);
 
 			auto	iItemBinding = itemBindingPtr in dmlEngine.mVoidToDeclarativeItems;
+			if (iItemBinding is null)
+			{
+				int toto = 10;
+			}
 			assert(iItemBinding !is null);
 			T	itemBinding = cast(T)(*iItemBinding);
 
