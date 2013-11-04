@@ -69,20 +69,21 @@ class ItemBinding(T) : dquick.script.i_item_binding.IItemBinding {
 		{
 			static if (is(typeof(__traits(getMember, this, member)) : dquick.script.property_binding.PropertyBinding)) // Instantiate property binding
 			{
-				static if (__traits(hasMember, this, "____"~member~"ItemBinding")) // Instanciate subitem binding
+				static immutable string propertyName = getPropertyNameFromPropertyDeclaration(member);
+				static if (__traits(hasMember, this, "____"~propertyName~"ItemBinding")) // Instanciate subitem binding
 				{
-					//__traits(getMember, this, "____"~member~"ItemBinding") = new typeof(__traits(getMember, this, "____"~member~"ItemBinding"))(dmlEngine, __traits(getMember, item, member)); // Instanciate subitem binding
-					//dmlEngine.addObjectBinding!(typeof(__traits(getMember, this, "____"~member~"ItemBinding")))(__traits(getMember, this, "____"~member~"ItemBinding"), "");
-					__traits(getMember, this, member) = new typeof(__traits(getMember, this, member))(this, this);  // Instantiate property binding linked to __member inside this
-					__traits(getMember, this, "__"~getSignalNameFromPropertyName(member~"ItemBinding")).connect(&__traits(getMember, this, member).onChanged); // Signal
+					//__traits(getMember, this, "____"~propertyName~"ItemBinding") = new typeof(__traits(getMember, this, "____"~propertyName~"ItemBinding"))(dmlEngine, __traits(getMember, item, propertyName)); // Instanciate subitem binding
+					//dmlEngine.addObjectBinding!(typeof(__traits(getMember, this, "____"~propertyName~"ItemBinding")))(__traits(getMember, this, "____"~propertyName~"ItemBinding"), "");
+					__traits(getMember, this, member) = new typeof(__traits(getMember, this, member))(this, this);  // Instantiate property binding linked to __propertyName inside this
+					__traits(getMember, this, "__"~getSignalNameFromPropertyName(propertyName~"ItemBinding")).connect(&__traits(getMember, this, member).onChanged); // Signal
 
-					__traits(getMember, this.item, getSignalNameFromPropertyName(member)).connect(&__traits(getMember, this, "__"~getSignalNameFromPropertyName(member))); // Signal
-					__traits(getMember, this, "__"~getSignalNameFromPropertyName(member))(__traits(getMember, item, member)); // Set initial value
+					__traits(getMember, this.item, getSignalNameFromPropertyName(propertyName)).connect(&__traits(getMember, this, "__"~getSignalNameFromPropertyName(propertyName))); // Signal
+					__traits(getMember, this, "__"~getSignalNameFromPropertyName(propertyName))(__traits(getMember, item, propertyName)); // Set initial value
 				}
 				else // Simple type
 				{
 					__traits(getMember, this, member) = new typeof(__traits(getMember, this, member))(this, item);  // Instantiate property binding linked to member inside item
-					__traits(getMember, this.item, getSignalNameFromPropertyName(member)).connect(&__traits(getMember, this, member).onChanged); // Signal
+					__traits(getMember, this.item, getSignalNameFromPropertyName(propertyName)).connect(&__traits(getMember, this, member).onChanged); // Signal
 				}
 
 				/*foreach (overload; __traits(getOverloads, T, member)) 
@@ -131,7 +132,7 @@ class ItemBinding(T) : dquick.script.i_item_binding.IItemBinding {
 	}
 
 	T	item;
-	override DeclarativeItem	declarativeItem() {return item;}
+	DeclarativeItem	declarativeItem() {return item;}
 
 	dquick.script.dml_engine.DMLEngine	dmlEngine2()
 	{
@@ -245,7 +246,7 @@ class ItemBinding(T) : dquick.script.i_item_binding.IItemBinding {
 
 		foreach (member; __traits(allMembers, T))
 		{
-			static if (isProperty!(T, member))
+			static if (isProperty!(T, member)) // Property
 			{
 				//pragma(msg, member);
 				static if (__traits(compiles, __traits(getOverloads, T, member)))
@@ -332,7 +333,47 @@ class ItemBinding(T) : dquick.script.i_item_binding.IItemBinding {
 						}
 					}
 				}
+			}
+			static if (isProperty!(T, member) == false)
+			{
+				static if (__traits(compiles, __traits(getOverloads, T, member))) // Method
+				{
+					foreach (overload; __traits(getOverloads, T, member)) 
+					{
+						static if (	isCallable!(overload) &&
+									isSomeFunction!(overload) &&
+									!__traits(isStaticFunction, overload) &&
+									!isDelegate!(overload) &&
+									member != "__ctor" && member != "__dtor" /*dont want constructor nor destructor*/ &&
+									!__traits(hasMember, object.Object, member) /*dont want objects base methods*/)
+						{
+							static if (__traits(compiles, fullyQualifiedName2!(ReturnType!(overload)))) // Hack because of a bug in fullyQualifiedName
+							{
+								// Collect all argument in a tuple
+								string	parameters;
+								alias ParameterTypeTuple!(overload) MyParameterTypeTuple;
 
+								foreach (index, paramType; MyParameterTypeTuple)
+									parameters ~= format("%s param%d, ", fullyQualifiedName2!(paramType), index);
+								parameters = chomp(parameters, ", ");
+
+								string	callParameters;
+								foreach (index, paramType; MyParameterTypeTuple)
+									callParameters ~= format("param%d, ", index);
+								callParameters = chomp(callParameters, ", ");
+
+								result ~= format("%s	%s(%s)", fullyQualifiedName2!(ReturnType!(overload)), member, parameters);
+								result ~= format("{");
+								result ~= format("	return item.%s(%s);", member, callParameters);
+								result ~= format("}");
+							}
+						}
+					}
+				}
+			}
+			static if (__traits(compiles, EnumMembers!(__traits(getMember, T, member))) && is(OriginalType!(__traits(getMember, T, member)) == int)) // If its an int enum
+			{
+				result ~= format("alias %s	%s;", fullyQualifiedName2!(__traits(getMember, T, member)), member);
 			}
 		}
 

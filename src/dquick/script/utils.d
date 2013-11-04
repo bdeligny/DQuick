@@ -8,6 +8,7 @@ import std.variant;
 import std.traits;
 import core.memory;
 import std.c.string;
+import std.algorithm;
 
 string	repeat(string s, int count)
 {
@@ -43,10 +44,8 @@ string	getSignalNameFromPropertyName(string propertyName)
 
 string	getPropertyNameFromPropertyDeclaration(string declaration)
 {
-	auto reg = ctRegex!("^(.+)Property$");
-	auto	m = match(declaration, reg);
-	if (m)
-		return m.captures[1];
+	if (endsWith(declaration, "Property"))
+		return declaration[0 .. declaration.length - "Property".length];
 	return "";
 }
 
@@ -256,6 +255,11 @@ unittest
 
 	assert(getPropertyNameFromSignalName("onMouseXChanged") == "mouseX");
 	assert(getPropertyNameFromSignalName("onXChanged") == "x");
+
+	assert(getPropertyNameFromPropertyDeclaration("mouseXProperty") == "mouseX");
+	assert(getPropertyNameFromPropertyDeclaration("XProperty") == "X");
+	assert(getPropertyNameFromPropertyDeclaration("xProperty") == "x");
+	assert(getPropertyNameFromPropertyDeclaration("xProp") == "");
 }
 
 

@@ -150,7 +150,7 @@ version(unittest)
 
 unittest
 {
-	DMLEngineCore	dmlEngine = new DMLEngineCore;
+	/+DMLEngineCore	dmlEngine = new DMLEngineCore;
 	dmlEngine.create();
 	dmlEngine.addObjectBindingType!(Item, "Item");
 
@@ -387,7 +387,7 @@ unittest
 		dmlEngine.execute("testObject3.nativeSubItem = testObject5.nativeSubItem", "");
 		dmlEngine.execute("subItemGlobal8 = testObject3.nativeSubItem", "");
 		assert(dmlEngine.getLuaGlobal!SubItem("subItemGlobal8") is testObject5.nativeSubItem);
-	}
+	}+/
 }
 
 class DMLEngineCore
@@ -627,7 +627,7 @@ public:
 	}
 
 	static immutable bool showDebug = 0;
-private:
+protected:
 
 	struct ItemRefCounting
 	{
@@ -710,6 +710,7 @@ extern(C)
 
 					if (key == "id")
 					{
+						writefln("id");
 						itemBinding.id = to!(string)(lua_tostring(L, -1));
 					}
 					else
@@ -856,10 +857,6 @@ extern(C)
 			lua_remove(L, 1);
 
 			auto	iItemBinding = itemBindingPtr in dmlEngine.mVoidToDeclarativeItems;
-			if (iItemBinding is null)
-			{
-				int toto = 10;
-			}
 			assert(iItemBinding !is null);
 			T	itemBinding = cast(T)(*iItemBinding);
 

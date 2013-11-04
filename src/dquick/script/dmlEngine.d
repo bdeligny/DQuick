@@ -124,17 +124,18 @@ version(unittest)
 
 unittest
 {
-	/+DMLEngine	dmlEngine = new DMLEngine;
+	DMLEngine	dmlEngine = new DMLEngine;
 	dmlEngine.create();
 	dmlEngine.addItemType!(Item, "Item");
 
-	// Test basic item
+	/+// Test basic item
 	string lua1 = q"(
 		Item {
 			id = "item1"
 		}
 	)";
 	dmlEngine.execute(lua1, "");
+	assert(dmlEngine.item!Item("item1") !is null);
 	//assert(dmlEngine.rootItem() !is null);
 	//assert(dmlEngine.rootItem().id == "item1");
 
@@ -146,6 +147,7 @@ unittest
 		}
 	)";
 	dmlEngine.execute(lua2, "");
+	assert(dmlEngine.item!Item("item2") !is null);
 	assert(dmlEngine.item!Item("item2").nativeProperty == 100);
 	dmlEngine.execute("item2.nativeProperty = item2.nativeProperty * 2", "");
 	assert(dmlEngine.item!Item("item2").nativeProperty == 200);
@@ -235,7 +237,7 @@ unittest
 		}
 	)";
 	dmlEngine.execute(lua7, "");
-	assert(dmlEngine.item!Item("item11").nativeEnumProperty == Item.Enum.enumVal2);
+	assert(dmlEngine.item!Item("item11").nativeEnumProperty == Item.Enum.enumVal2);+/
 
 	// Test simple property alias (parent to child)
 	string lua8 = q"(
@@ -255,7 +257,7 @@ unittest
 	dmlEngine.execute(lua8, "");
 	assert(dmlEngine.item!Item("item13").nativeProperty == 200);
 
-	// Test 2 ways property alias (parent to child and parent to child, usefull for buttons that can be checked from qml or mouse input)
+	/+// Test 2 ways property alias (parent to child and parent to child, usefull for buttons that can be checked from qml or mouse input)
 	string lua9 = q"(
 		Item {
 			id = "item14",
@@ -397,9 +399,9 @@ public:
 
 	T	item(T)(string id)
 	{
-		/*auto iItemBinding = mIdToDeclarativeItems[id];
-		if (iItemBinding !is null)
-			return cast(T)(iItemBinding.declarativeItem);*/
+		auto itemBinding = itemBinding!(dquick.script.item_binding.ItemBinding!(T))(id);
+		if (itemBinding !is null)
+			return itemBinding.item;
 		return null;
 	}
 
