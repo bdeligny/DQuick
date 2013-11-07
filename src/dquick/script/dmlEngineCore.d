@@ -696,6 +696,7 @@ extern(C)
 			lua_pop(L, 1);
 
 			T	itemBinding = new T();
+			writefln("create %s", itemBinding);
 			itemBinding.dmlEngine = dmlEngine;
 			itemBinding.creating = true;
 
@@ -811,7 +812,7 @@ extern(C)
 						static if (MyParameterTypeTuple.length == 1)
 						{
 							MyParameterTypeTuple[0]	castedItemBinding = cast(MyParameterTypeTuple[0])(*child);
-							writeln(typeid(MyParameterTypeTuple[0]));
+							writeln(typeid(MyParameterTypeTuple[0]), castedItemBinding);
 							if (castedItemBinding !is null)
 							{
 								writeln("child");

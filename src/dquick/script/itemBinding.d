@@ -354,12 +354,22 @@ class ItemBinding(T) : dquick.script.i_item_binding.IItemBinding {
 								alias ParameterTypeTuple!(overload) MyParameterTypeTuple;
 
 								foreach (index, paramType; MyParameterTypeTuple)
-									parameters ~= format("%s param%d, ", fullyQualifiedName2!(paramType), index);
+								{
+									static if (is(paramType : dquick.item.declarative_item.DeclarativeItem))
+										parameters ~= format("dquick.script.item_binding.ItemBinding!(%s) param%d, ", fullyQualifiedName2!(paramType), index);
+									else
+										parameters ~= format("%s param%d, ", fullyQualifiedName2!(paramType), index);
+								}
 								parameters = chomp(parameters, ", ");
 
 								string	callParameters;
 								foreach (index, paramType; MyParameterTypeTuple)
-									callParameters ~= format("param%d, ", index);
+								{
+									static if (is(paramType : dquick.item.declarative_item.DeclarativeItem))
+										callParameters ~= format("param%d.item, ", index);
+									else
+										callParameters ~= format("param%d, ", index);
+								}
 								callParameters = chomp(callParameters, ", ");
 
 								result ~= format("%s	%s(%s)", fullyQualifiedName2!(ReturnType!(overload)), member, parameters);
