@@ -795,17 +795,30 @@ extern(C)
 					auto	child = itemBindingPtr in dmlEngine.mVoidToDeclarativeItems;
 					if (child == null)
 					{
-						writeln("createLuaBind:: can't find item\n");
+						writefln("createLuaBind:: can't find item at key \"%d\"\n", lua_type(L, -2));
 						return 0;
 					}
 
-					DeclarativeItem	declarativeItem = cast(DeclarativeItem)(*child);
-					if (declarativeItem is null)
+					static if (__traits(hasMember, T, "addChild") == false)
 					{
-						writeln("createLuaBind:: item is not a DeclarativeItem\n");
+						writefln("createLuaBind:: can't add item at key \"%d\" as child without addChild method\n", lua_type(L, -2));
 						return 0;
 					}
-					itemBinding.addChild(declarativeItem);
+
+					foreach (overload; __traits(getOverloads, T, "addChild")) 
+					{
+						alias ParameterTypeTuple!(overload) MyParameterTypeTuple;
+						static if (MyParameterTypeTuple.length == 1)
+						{
+							MyParameterTypeTuple[0]	castedItemBinding = cast(MyParameterTypeTuple[0])(*child);
+							writeln(typeid(MyParameterTypeTuple[0]));
+							if (castedItemBinding !is null)
+							{
+								writeln("child");
+								__traits(getMember, itemBinding, "addChild")(castedItemBinding);
+							}
+						}
+					}
 				}
 
 				/* removes 'value'; keeps 'key' for next iteration */
