@@ -356,7 +356,7 @@ class ItemBinding(T) : dquick.script.i_item_binding.IItemBinding {
 								foreach (index, paramType; MyParameterTypeTuple)
 								{
 									static if (is(paramType : dquick.item.declarative_item.DeclarativeItem))
-										parameters ~= format("dquick.script.item_binding.ItemBinding!(%s) param%d, ", fullyQualifiedName2!(paramType), index);
+										parameters ~= format("dquick.script.i_item_binding.IItemBinding param%d, ", index);
 									else
 										parameters ~= format("%s param%d, ", fullyQualifiedName2!(paramType), index);
 								}
@@ -366,7 +366,7 @@ class ItemBinding(T) : dquick.script.i_item_binding.IItemBinding {
 								foreach (index, paramType; MyParameterTypeTuple)
 								{
 									static if (is(paramType : dquick.item.declarative_item.DeclarativeItem))
-										callParameters ~= format("param%d.item, ", index);
+										callParameters ~= format("cast(%s)(param%d.item), ", fullyQualifiedName2!(paramType), index);
 									else
 										callParameters ~= format("param%d, ", index);
 								}
