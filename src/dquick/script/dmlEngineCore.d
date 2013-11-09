@@ -47,6 +47,8 @@ version(unittest)
 		}
 		mixin Signal!(int) onNativePropertyChanged;
 		int		mNativeProperty;
+
+		Object	itemObject() { return this;}
 	}
 	class Item : DeclarativeItem, dquick.script.i_item_binding.IItemBinding
 	{
@@ -140,6 +142,8 @@ version(unittest)
 		}
 		mixin Signal!(SubItem) onNativeSubItemChanged;
 		SubItem		mNativeSubItem;
+
+		Object	itemObject() { return this;}
 	}
 
 	int	testSumFunctionBinding(int a, int b)

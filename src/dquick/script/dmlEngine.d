@@ -22,6 +22,26 @@ import std.c.string;
 
 version(unittest)
 {
+	/*string	generateTest1(T)()
+	{
+		string	result;
+
+		alias BaseTypeTuple!T	bases;
+		string	basesString;
+		foreach (base, bases)
+			basesString ~= format("%s, ", fullyQualifiedName(base));
+		basesString = chomp(basesString, ", ");
+
+		format("class	Test1(%s) : %s {}", fullyQualifiedName(T), basesString);
+	}
+
+	mixin("class	Test1(T1) : Test1!(DeclarativeItem)
+	{
+	}");*/
+
+
+
+
 	class SubItem : DeclarativeItem
 	{
 		void	nativeProperty(int value)
@@ -124,6 +144,9 @@ version(unittest)
 
 unittest
 {
+	//auto test1 = new Test1!Item;
+
+
 	DMLEngine	dmlEngine = new DMLEngine;
 	dmlEngine.create();
 	dmlEngine.addItemType!(Item, "Item");
@@ -369,9 +392,17 @@ unittest
 class DMLEngine : dquick.script.dml_engine_core.DMLEngineCore
 {
 public:
+	void	toto()
+	{
+		/*class Toto666
+		{
+		}
+		pragma(msg, typeid(Toto666));*/
+	}
 	void	addItemType(type, string luaName)()
 	{
 		addObjectBindingType!(dquick.script.item_binding.ItemBinding!(type), luaName)();
+
 	}
 
 	void	addObject(T)(T object, string luaName)
@@ -399,6 +430,9 @@ public:
 
 	T	item(T)(string id)
 	{
+		//auto toto = new dquick.script.dml_engine.DMLEngine.toto.Toto666;
+		//pragma(msg, typeid(toto));
+
 		auto itemBinding = itemBinding!(dquick.script.item_binding.ItemBinding!(T))(id);
 		if (itemBinding !is null)
 			return itemBinding.item;
