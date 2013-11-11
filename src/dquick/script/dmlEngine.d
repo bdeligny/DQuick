@@ -20,61 +20,8 @@ import std.traits;
 import std.typetuple;
 import std.c.string;
 
-
-/*template	CreateWrapper(T)
-{
-	mixin("
-		  class Toto
-		  {
-		  }
-		  ");
-}*/
-
 version(unittest)
 {
-	/*interface TestBase(T) 
-	{
-	}
-
-	template TestBaseTypeTuple2(A...)
-	{
-		static if (A.length == 0)
-			alias A	TestBaseTypeTuple2;
-		else
-			alias TypeTuple!(TestBase!(A[0]), TestBaseTypeTuple2!(A[1 .. $])) TestBaseTypeTuple2;
-	}
-
-	template TestBaseTypeTuple(A)
-	{
-		alias TestBaseTypeTuple2!(BaseTypeTuple!(A))	TestBaseTypeTuple;
-	}
-
-	class Test(T) : TestBaseTypeTuple!(T)
-	{
-		this()
-		{
-			writeln(typeid(T), " base ", typeid(BaseTypeTuple!(typeof(this))));
-		}
-	}*/
-
-	/*string	generateTest1(T)()
-	{
-		string	result;
-
-		alias BaseTypeTuple!T	bases;
-		string	basesString;
-		foreach (base, bases)
-			basesString ~= format("%s, ", fullyQualifiedName(base));
-		basesString = chomp(basesString, ", ");
-
-		format("class	Test1(%s) : %s {}", fullyQualifiedName(T), basesString);
-	}
-
-	mixin("class	Test1(T1) : Test1!(DeclarativeItem)
-	{
-	}");*/
-
-
 	interface Interface
 	{
 		int		nativeProperty();
@@ -184,58 +131,15 @@ version(unittest)
 
 	int	testSumFunctionBinding2(Item a, Interface b)
 	{
-		writefln("testSumFunctionBinding2 = %d %d", a.nativeProperty, b.nativeProperty);
 		return a.nativeProperty + b.nativeProperty;
 	}
 }
 
 unittest
 {
-	try {
-	/*import std.typecons;
-
-	interface A { int run(); }
-	interface B { int stop(); @property int status(); }
-	class X
-	{
-		int run() { return 1; }
-		int stop() { return 2; }
-		@property int status() { return 3; }
-	}
-
-	auto x = new X();
-	auto ab = x.wrap!(A, B);
-	pragma(msg, typeid(typeof(ab)));*/
-
-
-	//auto test = new Test!Item;
-
-	/*class	TestVoid {
-		int i;
-	}
-	TestVoid	testVoid1 = new TestVoid;
-	writefln("%x", cast(TestVoid*)testVoid1);
-	testVoid1.i = 10;
-	void*	testVoid2 = cast(void*)testVoid1;
-	TestVoid	testVoid3 = cast(TestVoid)testVoid2;
-	writefln("%x", cast(TestVoid*)testVoid3);*/
-
-
-
 	DMLEngine	dmlEngine = new DMLEngine;
 	dmlEngine.create();
 	dmlEngine.addItemType!(Item, "Item");
-
-	/*string lua8 = q"(
-		Item {
-			id = "item666",
-
-			Item {
-				id = "item667",
-			}
-		}
-	)";
-	dmlEngine.execute(lua8, "");*/
 
 	// Test basic item
 	string lua1 = q"(
@@ -408,7 +312,6 @@ unittest
 	// Test function binding with polymorphic object parameters
 	dmlEngine.addFunction!(testSumFunctionBinding2, "testSumFunctionBinding2")();
 	dmlEngine.execute("test2 = testSumFunctionBinding2(item2, item3)", "");
-	int toto = 10;
 	assert(dmlEngine.getLuaGlobal!int("test2") == 1300);
 
 	// Test already existing class instance binding
@@ -483,12 +386,6 @@ unittest
 		dmlEngine.execute("subItemGlobal8 = testObject3.nativeSubItem", "");
 		assert(dmlEngine.getLuaGlobal!SubItem("subItemGlobal8") is testObject5.nativeSubItem);
 	}
-	}
-	catch (Throwable e)
-	{
-		writeln(e.toString());
-		int toto = 10;
-	}
 }
 
 class DMLEngine : dquick.script.dml_engine_core.DMLEngineCore
@@ -496,21 +393,9 @@ class DMLEngine : dquick.script.dml_engine_core.DMLEngineCore
 public:
 	static immutable bool showDebug = 0;
 
-	void	toto()
-	{
-		/*class Toto666
-		{
-		}
-		pragma(msg, typeid(Toto666));*/
-	}
 	void	addItemType(type, string luaName)()
 	{
-		/*alias CreateWrapper!(type)	BindingItemType;
-
-		auto t = new BindingItemType.Toto;*/
-
 		addObjectBindingType!(dquick.script.item_binding.ItemBinding!(type), luaName)();
-
 	}
 
 	void	addObject(T)(T object, string luaName)
@@ -532,19 +417,13 @@ public:
 		{
 			DeclarativeItem	declarativeItem = cast(DeclarativeItem)(key);
 			if (declarativeItem && declarativeItem.parent() is null)
-			{
-				writeln("rootItem " ~ declarativeItem.id);
 				return declarativeItem;
-			}
 		}
 		return null;
 	}
 
 	T	item(T)(string id)
 	{
-		//auto toto = new dquick.script.dml_engine.DMLEngine.toto.Toto666;
-		//pragma(msg, typeid(toto));
-
 		auto itemBinding = itemBinding!(dquick.script.item_binding.ItemBinding!(T))(id);
 		if (itemBinding !is null)
 			return itemBinding.item;
@@ -600,18 +479,8 @@ public:
 			static if (__traits(compiles, dquick.script.item_binding.generateFunctionOrMethodBinding!(func))) // Hack because of a bug in fullyQualifiedName
 			{
 				mixin("static " ~ dquick.script.item_binding.generateFunctionOrMethodBinding!(func));
-				//pragma(msg, dquick.script.item_binding.generateFunctionOrMethodBinding!(func));
-
-				/*static int	testSumFunctionBinding2(dquick.script.item_binding.ItemBindingBase!(dquick.script.dml_engine.Item) param0, dquick.script.item_binding.ItemBindingBase!(dquick.script.dml_engine.Item) param1)
-				{
-					writeln("wrapped function");
-					dquick.script.dml_engine.Item	a = cast(dquick.script.dml_engine.Item)(param0.itemObject);
-					return dquick.script.dml_engine.testSumFunctionBinding2(cast(dquick.script.dml_engine.Item)(param0.itemObject), cast(dquick.script.dml_engine.Item)(param1.itemObject));
-				}*/
-
 				mixin("alias " ~ __traits(identifier, func) ~ " wrappedFunc;");
 				dquick.script.dml_engine_core.DMLEngineCore.addFunction!(wrappedFunc, luaName);
-				//pragma(msg, dquick.script.item_binding.generateFunctionOrMethodBinding!(func));
 			}
 		}
 	}
@@ -645,11 +514,6 @@ private:
 	void	unregisterItem(T)(T item)
 	{
 		auto	refCountPtr = item in mItemsToItemBindings;
-		if (refCountPtr is null)
-		{
-			int toto = 10;
-			writefln("");
-		}
 		assert(refCountPtr !is null);
 
 		refCountPtr.count--;

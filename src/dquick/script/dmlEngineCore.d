@@ -157,7 +157,6 @@ version(unittest)
 
 	int	testSumFunctionBinding2(Item a, Interface b)
 	{
-		writefln("testSumFunctionBinding2 = %d %d", a.nativeProperty, b.nativeProperty);
 		return a.nativeProperty + b.nativeProperty;
 	}
 }
@@ -210,12 +209,10 @@ unittest
 			nativeTotalProperty = 0,
 			virtualProperty = 1000,
 			onVirtualPropertyChanged = function()
-				print("onVirtualPropertyChanged")
 				item4.nativeTotalProperty = item4.nativeTotalProperty + item4.virtualProperty
 			end,
 			nativeProperty = 100,
 			onNativePropertyChanged = function()
-				print("onNativePropertyChanged")
 				item4.nativeTotalProperty = item4.nativeTotalProperty + item4.nativeProperty
 			end,
 		}
@@ -509,14 +506,6 @@ public:
 			object.dmlEngine = this;
 			object.creating = false;
 			mVoidToDeclarativeItems[cast(void*)(object)] = object;
-
-			// Hack to retrieve item ptr
-			/*dquick.script.i_item_binding.IItemBinding[int]	map;
-			map[0] = object;
-			auto	itemBindingPtr = 0 in map;*/
-			T*	itemBindingPtr = cast(T*)object;
-
-			writefln("register %s %x", id, itemBindingPtr);
 			if (id != "")
 			{
 				if (id in mIdToDeclarativeItems)
@@ -629,10 +618,7 @@ public:
 		{
 			DeclarativeItem	declarativeItem = cast(DeclarativeItem)(binding);
 			if (declarativeItem && declarativeItem.parent() is null)
-			{
-				writeln("rootItem " ~ declarativeItem.id);
 				return declarativeItem;
-			}
 		}
 		return null;
 	}
@@ -723,7 +709,6 @@ extern(C)
 			lua_pop(L, 1);
 
 			T	itemBinding = new T();
-			writefln("create %s", itemBinding);
 			itemBinding.dmlEngine = dmlEngine;
 			itemBinding.creating = true;
 
@@ -738,7 +723,6 @@ extern(C)
 
 					if (key == "id")
 					{
-						writefln("id");
 						itemBinding.id = to!(string)(lua_tostring(L, -1));
 					}
 					else
@@ -746,10 +730,8 @@ extern(C)
 						bool	found = false;
 						foreach (member; __traits(allMembers, typeof(itemBinding)))
 						{
-							//writefln("member = %s", member);
 							static if (is(typeof(__traits(getMember, itemBinding, member)) : dquick.script.property_binding.PropertyBinding))
 							{
-								pragma(msg, member);
 								if (key == getPropertyNameFromPropertyDeclaration(member))
 								{
 									found = true;
@@ -839,12 +821,8 @@ extern(C)
 						{
 							DeclarativeItem	test = cast(DeclarativeItem)child;
 							MyParameterTypeTuple[0]	castedItemBinding = cast(MyParameterTypeTuple[0])(child);
-							writeln(typeid(MyParameterTypeTuple[0]), castedItemBinding);
 							if (castedItemBinding !is null)
-							{
-								writeln("child");
 								__traits(getMember, itemBinding, "addChild")(castedItemBinding);
-							}
 						}
 					}
 				}
@@ -892,20 +870,8 @@ extern(C)
 			DMLEngineCore	dmlEngine = cast(DMLEngineCore)lua_touserdata(L, -1);
 			lua_pop(L, 1);
 
-
-			writefln("lua_gettop = %d", lua_gettop(L));
-
 			T	itemBinding = dquick.script.utils.valueFromLua!(T)(L, 1);
-
-
-
-
-
-
-
-
-			//assert(itemBinding !is null);
-			//writefln("itemBinding = %x", cast(T*)itemBinding);
+			assert(itemBinding !is null);
 			lua_remove(L, 1);
 			string	propertyId = dquick.script.utils.valueFromLua!(string)(L, 1);
 			lua_remove(L, 1);
@@ -995,7 +961,6 @@ extern(C)
 
 			T	itemBinding = dquick.script.utils.valueFromLua!(T)(L, 1);
 			assert(itemBinding !is null);
-			writefln("itemBinding = %x", cast(T*)itemBinding);
 			lua_remove(L, 1);
 			string	propertyId = to!(string)(lua_tostring(L, 1));
 			lua_remove(L, 1);
