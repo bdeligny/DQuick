@@ -9,6 +9,8 @@ import std.traits;
 import core.memory;
 import std.c.string;
 import std.algorithm;
+import std.stdio;
+import dquick.item.declarative_item;
 
 string	repeat(string s, int count)
 {
@@ -90,6 +92,8 @@ string	getLuaTypeName(lua_State* L, int index)
 
 T	valueFromLua(T)(lua_State* L, int index)
 {
+	assert(isPointer!T == false);
+
 	T	value;
 	static if (is(T == Variant))
 	{
@@ -111,13 +115,19 @@ T	valueFromLua(T)(lua_State* L, int index)
 	else static if (is(T == int) || is(T == enum))
 	{
 		if (!lua_isnumber(L, index))
+		{
+			int toto = 10;
 			throw new Exception(format("Lua value at index %d is a \"%s\", a number was expected\n", index, getLuaTypeName(L, index)));
+		}
 		value = cast(typeof(value))lua_tointeger(L, index);
 	}
 	else static if (is(T == float))
 	{
 		if (!lua_isnumber(L, index))
+		{
+			int toto = 10;
 			throw new Exception(format("Lua value at index %d is a \"%s\", a number was expected\n", index, getLuaTypeName(L, index)));
+		}
 		value = cast(float)lua_tonumber(L, index);
 	}
 	else static if (is(T == string))
@@ -133,13 +143,23 @@ T	valueFromLua(T)(lua_State* L, int index)
 		else
 		{
 			if (!lua_isuserdata(L, index))
+			{
+				int toto = 10;
 				throw new Exception(format("Lua value at index %d is a \"%s\", a userdata or nil was expected\n", index, getLuaTypeName(L, index)));
-			void*	itemBindingPtr = *(cast(void**)lua_touserdata(L, index));
+			}
+
+			void*	itemBindingVoidPtr = *(cast(void**)lua_touserdata(L, index));
+			dquick.script.i_item_binding.IItemBinding	itemBindingPtr = cast(dquick.script.i_item_binding.IItemBinding)(itemBindingVoidPtr);
+			writefln("itemBindingPtr %x", cast(void*)(itemBindingPtr));
+			//DeclarativeItem	declarativeItem = cast(DeclarativeItem)(*itemBindingPtr);
+			//writefln("%s", declarativeItem.id);
 			value = cast(T)(itemBindingPtr);
+			writefln("cast(T*)value %x", cast(T*)value);
 		}
 	}
 	else
 	{
+		int toto = 10;
 		throw new Exception(format("Lua value at index %d is a \"%s\", a number, boolean or string was expected\n", index, getLuaTypeName(L, index)));
 	}
 	return value;
@@ -147,6 +167,8 @@ T	valueFromLua(T)(lua_State* L, int index)
 
 void	valueToLua(T)(lua_State* L, T value)
 {
+	assert(isPointer!T == false);
+
 	static if (is(T == Variant))
 	{
 		if (value.type == typeid(double))
@@ -170,11 +192,20 @@ void	valueToLua(T)(lua_State* L, T value)
 		lua_pushboolean(L, value);
 	else static if (is(T : dquick.script.i_item_binding.IItemBinding))
 	{
+		// Hack to retrieve item ptr
+		/*dquick.script.i_item_binding.IItemBinding[int]	map;
+		map[0] = value;
+		auto	itemBindingPtr = 0 in map;*/
+		dquick.script.i_item_binding.IItemBinding	iItemBinding = cast(dquick.script.i_item_binding.IItemBinding)value;
+
 		// Create a userdata that contains instance ptr and make it a global for user access
 		// It also contains a metatable for the member read and write acces
-		void*	itemBindingPtr = cast(void*)(value);
-		void*	userData = lua_newuserdata(L, itemBindingPtr.sizeof);
-		memcpy(userData, &itemBindingPtr, itemBindingPtr.sizeof);
+
+		writefln("setMap %x", cast(void*)iItemBinding);
+		writefln("setPtr %x", cast(T*)value);
+		void*	iItemBindingVoidPtr = cast(void*)(iItemBinding);
+		void*	userData = lua_newuserdata(L, iItemBindingVoidPtr.sizeof);
+		memcpy(userData, &iItemBindingVoidPtr, iItemBindingVoidPtr.sizeof);
 
 		lua_newtable(L);
 
@@ -186,6 +217,10 @@ void	valueToLua(T)(lua_State* L, T value)
 		lua_settable(L, -3);
 
 		lua_setmetatable(L, -2);
+
+		T	itemBindingAfter = valueFromLua!(T)(L, -1);
+		T*	itemBindingPtrAfter = cast(T*)(itemBindingAfter);
+		writefln("itemBindingPtrAfter %x", itemBindingPtrAfter);
 	}
 	else
 	{

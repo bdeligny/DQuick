@@ -160,7 +160,6 @@ class PropertyBinding
 	void	onChanged()
 	{
 		dirty = false;
-		writefln("creating = %d property = %s", itemBinding.creating, propertyName);
 		if (itemBinding.creating == false && slotLuaReference != -1)
 			itemBinding.dmlEngine.execute(slotLuaReference);
 		if (itemBinding.dmlEngine && itemBinding.dmlEngine.initializationPhase == false)

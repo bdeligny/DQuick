@@ -20,8 +20,43 @@ import std.traits;
 import std.typetuple;
 import std.c.string;
 
+
+/*template	CreateWrapper(T)
+{
+	mixin("
+		  class Toto
+		  {
+		  }
+		  ");
+}*/
+
 version(unittest)
 {
+	/*interface TestBase(T) 
+	{
+	}
+
+	template TestBaseTypeTuple2(A...)
+	{
+		static if (A.length == 0)
+			alias A	TestBaseTypeTuple2;
+		else
+			alias TypeTuple!(TestBase!(A[0]), TestBaseTypeTuple2!(A[1 .. $])) TestBaseTypeTuple2;
+	}
+
+	template TestBaseTypeTuple(A)
+	{
+		alias TestBaseTypeTuple2!(BaseTypeTuple!(A))	TestBaseTypeTuple;
+	}
+
+	class Test(T) : TestBaseTypeTuple!(T)
+	{
+		this()
+		{
+			writeln(typeid(T), " base ", typeid(BaseTypeTuple!(typeof(this))));
+		}
+	}*/
+
 	/*string	generateTest1(T)()
 	{
 		string	result;
@@ -40,8 +75,10 @@ version(unittest)
 	}");*/
 
 
-
-
+	interface Interface
+	{
+		int		nativeProperty();
+	}
 	class SubItem : DeclarativeItem
 	{
 		void	nativeProperty(int value)
@@ -59,7 +96,7 @@ version(unittest)
 		mixin Signal!(int) onNativePropertyChanged;
 		int		mNativeProperty;
 	}
-	class Item : DeclarativeItem
+	class Item : DeclarativeItem, Interface
 	{
 		this()
 		{
@@ -119,6 +156,10 @@ version(unittest)
 		{
 			return a + b + nativeProperty;
 		}
+		int	testNormalMethod2(Item a, Interface b)
+		{
+			return a.nativeProperty + b.nativeProperty + nativeProperty;
+		}
 
 		void	nativeSubItem(SubItem value)
 		{
@@ -140,18 +181,63 @@ version(unittest)
 	{
 		return a + b;
 	}
+
+	int	testSumFunctionBinding2(Item a, Interface b)
+	{
+		writefln("testSumFunctionBinding2 = %d %d", a.nativeProperty, b.nativeProperty);
+		return a.nativeProperty + b.nativeProperty;
+	}
 }
 
 unittest
 {
-	//auto test1 = new Test1!Item;
+	try {
+	/*import std.typecons;
+
+	interface A { int run(); }
+	interface B { int stop(); @property int status(); }
+	class X
+	{
+		int run() { return 1; }
+		int stop() { return 2; }
+		@property int status() { return 3; }
+	}
+
+	auto x = new X();
+	auto ab = x.wrap!(A, B);
+	pragma(msg, typeid(typeof(ab)));*/
+
+
+	//auto test = new Test!Item;
+
+	/*class	TestVoid {
+		int i;
+	}
+	TestVoid	testVoid1 = new TestVoid;
+	writefln("%x", cast(TestVoid*)testVoid1);
+	testVoid1.i = 10;
+	void*	testVoid2 = cast(void*)testVoid1;
+	TestVoid	testVoid3 = cast(TestVoid)testVoid2;
+	writefln("%x", cast(TestVoid*)testVoid3);*/
+
 
 
 	DMLEngine	dmlEngine = new DMLEngine;
 	dmlEngine.create();
 	dmlEngine.addItemType!(Item, "Item");
 
-	/+// Test basic item
+	/*string lua8 = q"(
+		Item {
+			id = "item666",
+
+			Item {
+				id = "item667",
+			}
+		}
+	)";
+	dmlEngine.execute(lua8, "");*/
+
+	// Test basic item
 	string lua1 = q"(
 		Item {
 			id = "item1"
@@ -159,8 +245,8 @@ unittest
 	)";
 	dmlEngine.execute(lua1, "");
 	assert(dmlEngine.item!Item("item1") !is null);
-	//assert(dmlEngine.rootItem() !is null);
-	//assert(dmlEngine.rootItem().id == "item1");
+	assert(dmlEngine.rootItem() !is null);
+	assert(dmlEngine.rootItem().id == "item1");
 
 	// Test native property
 	string lua2 = q"(
@@ -260,7 +346,7 @@ unittest
 		}
 	)";
 	dmlEngine.execute(lua7, "");
-	assert(dmlEngine.item!Item("item11").nativeEnumProperty == Item.Enum.enumVal2);+/
+	assert(dmlEngine.item!Item("item11").nativeEnumProperty == Item.Enum.enumVal2);
 
 	// Test simple property alias (parent to child)
 	string lua8 = q"(
@@ -280,7 +366,7 @@ unittest
 	dmlEngine.execute(lua8, "");
 	assert(dmlEngine.item!Item("item13").nativeProperty == 200);
 
-	/+// Test 2 ways property alias (parent to child and parent to child, usefull for buttons that can be checked from qml or mouse input)
+	// Test 2 ways property alias (parent to child and parent to child, usefull for buttons that can be checked from qml or mouse input)
 	string lua9 = q"(
 		Item {
 			id = "item14",
@@ -319,6 +405,12 @@ unittest
 	dmlEngine.execute(lua10, "");
 	assert(dmlEngine.getLuaGlobal!int("test") == 300);
 
+	// Test function binding with polymorphic object parameters
+	dmlEngine.addFunction!(testSumFunctionBinding2, "testSumFunctionBinding2")();
+	dmlEngine.execute("test2 = testSumFunctionBinding2(item2, item3)", "");
+	int toto = 10;
+	assert(dmlEngine.getLuaGlobal!int("test2") == 1300);
+
 	// Test already existing class instance binding
 	Item	testObject = new Item;
 	dmlEngine.addObject(testObject, "testObject");
@@ -338,6 +430,10 @@ unittest
 	)";
 	dmlEngine.execute(lua12, "");
 	assert(dmlEngine.getLuaGlobal!int("total") == 111);
+
+	// Test normal method binding with polymorphic object parameters
+	dmlEngine.execute("total2 = testObject2.testNormalMethod2(item2, item3)", "");
+	assert(dmlEngine.getLuaGlobal!int("total2") == 1400);
 
 	// Test subitem property binding
 	{
@@ -386,12 +482,20 @@ unittest
 		dmlEngine.execute("testObject3.nativeSubItem = testObject5.nativeSubItem", "");
 		dmlEngine.execute("subItemGlobal8 = testObject3.nativeSubItem", "");
 		assert(dmlEngine.getLuaGlobal!SubItem("subItemGlobal8") is testObject5.nativeSubItem);
-	}+/
+	}
+	}
+	catch (Throwable e)
+	{
+		writeln(e.toString());
+		int toto = 10;
+	}
 }
 
 class DMLEngine : dquick.script.dml_engine_core.DMLEngineCore
 {
 public:
+	static immutable bool showDebug = 0;
+
 	void	toto()
 	{
 		/*class Toto666
@@ -401,6 +505,10 @@ public:
 	}
 	void	addItemType(type, string luaName)()
 	{
+		/*alias CreateWrapper!(type)	BindingItemType;
+
+		auto t = new BindingItemType.Toto;*/
+
 		addObjectBindingType!(dquick.script.item_binding.ItemBinding!(type), luaName)();
 
 	}
@@ -417,14 +525,18 @@ public:
 
 	DeclarativeItem	rootItem()
 	{
-		/*foreach (key, binding; mVoidToDeclarativeItems)
+		DeclarativeItem	result = rootItemBinding();
+		if (result !is null)
+			return result;
+		foreach (key, binding; mItemsToItemBindings)
 		{
-			if (binding.declarativeItem.parent() is null)
+			DeclarativeItem	declarativeItem = cast(DeclarativeItem)(key);
+			if (declarativeItem && declarativeItem.parent() is null)
 			{
-				writeln("rootItem " ~ binding.declarativeItem.id);
-				return binding.declarativeItem;
+				writeln("rootItem " ~ declarativeItem.id);
+				return declarativeItem;
 			}
-		}*/
+		}
 		return null;
 	}
 
@@ -448,15 +560,10 @@ public:
 		T	value;
 		static if (is(T : dquick.item.declarative_item.DeclarativeItem))
 		{
-			void*	itemBindingPtr;
-			itemBindingPtr = cast(void*)(dquick.script.utils.valueFromLua!(dquick.script.i_item_binding.IItemBinding)(mLuaState, -1));
-			if (itemBindingPtr is null)
+			auto itemBinding = dquick.script.utils.valueFromLua!(dquick.script.item_binding.ItemBinding!(T))(mLuaState, -1);
+			if (itemBinding is null)
 				return null;
-
-			auto	iItemBinding = itemBindingPtr in mVoidToDeclarativeItems;
-			assert(iItemBinding !is null);
-
-			value = cast(T)iItemBinding.declarativeItem();
+			value = cast(T)(itemBinding.declarativeItem());
 		}
 		else
 		{
@@ -482,7 +589,32 @@ public:
 		lua_setglobal(mLuaState, name.toStringz());
 	}
 
-	static immutable bool showDebug = 0;
+	void	addFunction(alias func, string luaName)()
+	{
+		string	functionMixin;
+		static if (	isCallable!(func) &&
+					isSomeFunction!(func) &&
+				   __traits(isStaticFunction, func) &&
+					   !isDelegate!(func))
+		{
+			static if (__traits(compiles, dquick.script.item_binding.generateFunctionOrMethodBinding!(func))) // Hack because of a bug in fullyQualifiedName
+			{
+				mixin("static " ~ dquick.script.item_binding.generateFunctionOrMethodBinding!(func));
+				//pragma(msg, dquick.script.item_binding.generateFunctionOrMethodBinding!(func));
+
+				/*static int	testSumFunctionBinding2(dquick.script.item_binding.ItemBindingBase!(dquick.script.dml_engine.Item) param0, dquick.script.item_binding.ItemBindingBase!(dquick.script.dml_engine.Item) param1)
+				{
+					writeln("wrapped function");
+					dquick.script.dml_engine.Item	a = cast(dquick.script.dml_engine.Item)(param0.itemObject);
+					return dquick.script.dml_engine.testSumFunctionBinding2(cast(dquick.script.dml_engine.Item)(param0.itemObject), cast(dquick.script.dml_engine.Item)(param1.itemObject));
+				}*/
+
+				mixin("alias " ~ __traits(identifier, func) ~ " wrappedFunc;");
+				dquick.script.dml_engine_core.DMLEngineCore.addFunction!(wrappedFunc, luaName);
+				//pragma(msg, dquick.script.item_binding.generateFunctionOrMethodBinding!(func));
+			}
+		}
+	}
 private:
 
 	dquick.script.item_binding.ItemBinding!T	registerItem(T)(T item)
@@ -495,11 +627,14 @@ private:
 		}
 
 		dquick.script.item_binding.ItemBinding!T	itemBinding = new dquick.script.item_binding.ItemBinding!T(item);
-		itemBinding.dmlEngine = this;
-		//static if (is(T : DeclarativeItem))
-		//	itemBinding.item.id = luaName;
+		registerItem!T(item, itemBinding);
 		addObjectBinding!(dquick.script.item_binding.ItemBinding!T)(itemBinding, "");
-
+		return itemBinding;
+	}
+	dquick.script.item_binding.ItemBinding!T	registerItem(T)(T item, dquick.script.item_binding.ItemBinding!T itemBinding)
+	{
+		assert((item in mItemsToItemBindings) is null);
+		itemBinding.dmlEngine = this;
 		ItemRefCounting	newRefCount;
 		newRefCount.count = 1;
 		newRefCount.iItemBinding = itemBinding;

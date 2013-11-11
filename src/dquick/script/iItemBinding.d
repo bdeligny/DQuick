@@ -10,5 +10,4 @@ interface IItemBinding {
 	static if (dquick.script.dml_engine.DMLEngine.showDebug)
 		string	displayDependents();
 	bool	creating();
-	Object	itemObject();
 }

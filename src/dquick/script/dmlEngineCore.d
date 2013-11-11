@@ -22,9 +22,13 @@ import std.c.string;
 
 version(unittest)
 {
+	interface Interface : dquick.script.i_item_binding.IItemBinding
+	{
+		int		nativeProperty();
+	}
 	class SubItem : DeclarativeItem, dquick.script.i_item_binding.IItemBinding
 	{
-		mixin(dquick.script.item_binding.ITEM_BINDING);
+		mixin(dquick.script.item_binding.I_ITEM_BINDING);
 
 		this()
 		{
@@ -47,12 +51,10 @@ version(unittest)
 		}
 		mixin Signal!(int) onNativePropertyChanged;
 		int		mNativeProperty;
-
-		Object	itemObject() { return this;}
 	}
-	class Item : DeclarativeItem, dquick.script.i_item_binding.IItemBinding
+	class Item : DeclarativeItem, dquick.script.i_item_binding.IItemBinding, Interface
 	{
-		mixin(dquick.script.item_binding.ITEM_BINDING);
+		mixin(dquick.script.item_binding.I_ITEM_BINDING);
 
 		this()
 		{
@@ -126,6 +128,10 @@ version(unittest)
 		{
 			return a + b + nativeProperty;
 		}
+		int	testNormalMethod2(Item a, Interface b)
+		{
+			return a.nativeProperty + b.nativeProperty + nativeProperty;
+		}
 
 		dquick.script.native_property_binding.NativePropertyBinding!(SubItem, Item, "nativeSubItem")	nativeSubItemProperty;
 		void	nativeSubItem(SubItem value)
@@ -142,19 +148,23 @@ version(unittest)
 		}
 		mixin Signal!(SubItem) onNativeSubItemChanged;
 		SubItem		mNativeSubItem;
-
-		Object	itemObject() { return this;}
 	}
 
 	int	testSumFunctionBinding(int a, int b)
 	{
 		return a + b;
 	}
+
+	int	testSumFunctionBinding2(Item a, Interface b)
+	{
+		writefln("testSumFunctionBinding2 = %d %d", a.nativeProperty, b.nativeProperty);
+		return a.nativeProperty + b.nativeProperty;
+	}
 }
 
 unittest
 {
-	/+DMLEngineCore	dmlEngine = new DMLEngineCore;
+	DMLEngineCore	dmlEngine = new DMLEngineCore;
 	dmlEngine.create();
 	dmlEngine.addObjectBindingType!(Item, "Item");
 
@@ -165,6 +175,9 @@ unittest
 		}
 	)";
 	dmlEngine.execute(lua1, "");
+	assert(dmlEngine.itemBinding!Item("item1") !is null);
+	assert(dmlEngine.rootItemBinding() !is null);
+	assert(dmlEngine.rootItemBinding().id == "item1");
 
 	// Test native property
 	string lua2 = q"(
@@ -324,6 +337,11 @@ unittest
 	dmlEngine.execute(lua10, "");
 	assert(dmlEngine.getLuaGlobal!int("test") == 300);
 
+	// Test function binding with polymorphic object parameters
+	dmlEngine.addFunction!(testSumFunctionBinding2, "testSumFunctionBinding2")();
+	dmlEngine.execute("test2 = testSumFunctionBinding2(item2, item3)", "");
+	assert(dmlEngine.getLuaGlobal!int("test2") == 1300);
+
 	// Test already existing class instance binding
 	Item	testObject = new Item;
 	dmlEngine.addObjectBinding(testObject, "testObject");
@@ -343,6 +361,10 @@ unittest
 	)";
 	dmlEngine.execute(lua12, "");
 	assert(dmlEngine.getLuaGlobal!int("total") == 111);
+
+	// Test normal method binding with polymorphic object parameters
+	dmlEngine.execute("total2 = testObject2.testNormalMethod2(item2, item3)", "");
+	assert(dmlEngine.getLuaGlobal!int("total2") == 1400);
 
 	// Test subitem property binding
 	{
@@ -391,7 +413,7 @@ unittest
 		dmlEngine.execute("testObject3.nativeSubItem = testObject5.nativeSubItem", "");
 		dmlEngine.execute("subItemGlobal8 = testObject3.nativeSubItem", "");
 		assert(dmlEngine.getLuaGlobal!SubItem("subItemGlobal8") is testObject5.nativeSubItem);
-	}+/
+	}
 }
 
 class DMLEngineCore
@@ -487,6 +509,14 @@ public:
 			object.dmlEngine = this;
 			object.creating = false;
 			mVoidToDeclarativeItems[cast(void*)(object)] = object;
+
+			// Hack to retrieve item ptr
+			/*dquick.script.i_item_binding.IItemBinding[int]	map;
+			map[0] = object;
+			auto	itemBindingPtr = 0 in map;*/
+			T*	itemBindingPtr = cast(T*)object;
+
+			writefln("register %s %x", id, itemBindingPtr);
 			if (id != "")
 			{
 				if (id in mIdToDeclarativeItems)
@@ -517,7 +547,7 @@ public:
 	{
 		assert(isCreated());
 
-		//GC.disable();
+		GC.disable();
 		//scope(exit) GC.enable();
 
 		lua_pushstring(luaState(), "__This");
@@ -632,13 +662,6 @@ public:
 
 	static immutable bool showDebug = 0;
 protected:
-
-	struct ItemRefCounting
-	{
-		dquick.script.i_item_binding.IItemBinding	iItemBinding;
-		uint										count;
-	}
-	ItemRefCounting[DeclarativeItem]	mItemsToItemBindings;
 	dquick.script.i_item_binding.IItemBinding[void*]	mVoidToDeclarativeItems;
 	dquick.script.i_item_binding.IItemBinding[string]	mIdToDeclarativeItems;
 	lua_State*	mLuaState;
@@ -796,9 +819,8 @@ extern(C)
 				else if (lua_type(L, -2) == LUA_TNUMBER)
 				{
 					void*	itemBindingPtr = *(cast(void**)lua_touserdata(L, -1));
-
-					auto	child = itemBindingPtr in dmlEngine.mVoidToDeclarativeItems;
-					if (child == null)
+					auto	child = cast(dquick.script.i_item_binding.IItemBinding)(itemBindingPtr);
+					if (child is null)
 					{
 						writefln("createLuaBind:: can't find item at key \"%d\"\n", lua_type(L, -2));
 						return 0;
@@ -815,7 +837,8 @@ extern(C)
 						alias ParameterTypeTuple!(overload) MyParameterTypeTuple;
 						static if (MyParameterTypeTuple.length == 1)
 						{
-							MyParameterTypeTuple[0]	castedItemBinding = cast(MyParameterTypeTuple[0])(*child);
+							DeclarativeItem	test = cast(DeclarativeItem)child;
+							MyParameterTypeTuple[0]	castedItemBinding = cast(MyParameterTypeTuple[0])(child);
 							writeln(typeid(MyParameterTypeTuple[0]), castedItemBinding);
 							if (castedItemBinding !is null)
 							{
@@ -869,14 +892,23 @@ extern(C)
 			DMLEngineCore	dmlEngine = cast(DMLEngineCore)lua_touserdata(L, -1);
 			lua_pop(L, 1);
 
-			void*	itemBindingPtr = *(cast(void**)lua_touserdata(L, 1));
-			lua_remove(L, 1);
-			string	propertyId = to!(string)(lua_tostring(L, 1));
-			lua_remove(L, 1);
 
-			auto	iItemBinding = itemBindingPtr in dmlEngine.mVoidToDeclarativeItems;
-			assert(iItemBinding !is null);
-			T	itemBinding = cast(T)(*iItemBinding);
+			writefln("lua_gettop = %d", lua_gettop(L));
+
+			T	itemBinding = dquick.script.utils.valueFromLua!(T)(L, 1);
+
+
+
+
+
+
+
+
+			//assert(itemBinding !is null);
+			//writefln("itemBinding = %x", cast(T*)itemBinding);
+			lua_remove(L, 1);
+			string	propertyId = dquick.script.utils.valueFromLua!(string)(L, 1);
+			lua_remove(L, 1);
 
 			// Search for property binding on the itemBinding
 			foreach (member; __traits(allMembers, typeof(itemBinding)))
@@ -901,8 +933,10 @@ extern(C)
 						{
 							// Create a userdata that contains instance void ptr and return it to emulate a method
 							// It also contains a metatable for calling
-							void*	userData = lua_newuserdata(L, itemBindingPtr.sizeof);
-							memcpy(userData, &itemBindingPtr, itemBindingPtr.sizeof);
+							dquick.script.i_item_binding.IItemBinding	iItemBinding = cast(dquick.script.i_item_binding.IItemBinding)itemBinding;
+							void*	itemBindingVoidPtr = cast(void*)iItemBinding;
+							void*	userData = lua_newuserdata(L, itemBindingVoidPtr.sizeof);
+							memcpy(userData, &itemBindingVoidPtr, itemBindingVoidPtr.sizeof);
 
 							// Create metatable
 							lua_newtable(L);
@@ -959,14 +993,12 @@ extern(C)
 			DMLEngineCore	dmlEngine = cast(DMLEngineCore)lua_touserdata(L, -1);
 			lua_pop(L, 1);
 
-			void*	itemBindingPtr = *(cast(void**)lua_touserdata(L, 1));
+			T	itemBinding = dquick.script.utils.valueFromLua!(T)(L, 1);
+			assert(itemBinding !is null);
+			writefln("itemBinding = %x", cast(T*)itemBinding);
 			lua_remove(L, 1);
 			string	propertyId = to!(string)(lua_tostring(L, 1));
 			lua_remove(L, 1);
-
-			auto	iItemBinding = itemBindingPtr in dmlEngine.mVoidToDeclarativeItems;
-			assert(iItemBinding !is null);
-			T	itemBinding = cast(T)(*iItemBinding);
 
 			bool	found = false;
 			foreach (member; __traits(allMembers, typeof(itemBinding)))
@@ -1042,15 +1074,11 @@ extern(C)
 			DMLEngineCore	dmlEngine = cast(DMLEngineCore)lua_touserdata(L, -1);
 			lua_pop(L, 1);
 
-			void*	itemBindingPtr = *(cast(void**)lua_touserdata(L, 1));
+			T	itemBinding = dquick.script.utils.valueFromLua!(T)(L, 1);
 			lua_remove(L, 1);
+			assert(itemBinding !is null);
 
-			auto	iItemBinding = itemBindingPtr in dmlEngine.mVoidToDeclarativeItems;
-			assert(iItemBinding !is null);
-			T	object = cast(T)(*iItemBinding);
-			assert(object !is null);
-
-			luaCallThisD!(methodName, T)(object, L, 1);
+			luaCallThisD!(methodName, T)(itemBinding, L, 1);
 
 			return 1;
 		}

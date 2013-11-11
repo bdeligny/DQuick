@@ -11,12 +11,18 @@ import dquick.script.native_property_binding;
 import dquick.script.virtual_property_binding;
 import dquick.script.utils;
 
+static string	I_ITEM_BINDING()
+{
+	return ITEM_BINDING() ~ "
+		override void	dmlEngine(dquick.script.dml_engine_core.DMLEngineCore dmlEngine) {mDMLEngine = dmlEngine;}
+	";
+}
+
 static string	ITEM_BINDING()
 {
 	return "
 		dquick.script.dml_engine_core.DMLEngineCore	mDMLEngine;
-		dquick.script.dml_engine_core.DMLEngineCore	dmlEngine() {return mDMLEngine;};
-		void										dmlEngine(dquick.script.dml_engine_core.DMLEngineCore dmlEngine) {mDMLEngine = dmlEngine;}
+		override dquick.script.dml_engine_core.DMLEngineCore	dmlEngine() {return mDMLEngine;};
 
 		bool	mCreating;
 		bool	creating() {return mCreating;}
@@ -251,50 +257,8 @@ static string	genProperties(T, propertyTypes...)()
 		}
 		static if (isProperty!(T, member) == false)
 		{
-			static if (__traits(compiles, __traits(getOverloads, T, member))) // Method
-			{
-				foreach (overload; __traits(getOverloads, T, member)) 
-				{
-					static if (	isCallable!(overload) &&
-								isSomeFunction!(overload) &&
-							   !__traits(isStaticFunction, overload) &&
-								   !isDelegate!(overload) &&
-								   member != "__ctor" && member != "__dtor" /*dont want constructor nor destructor*/ &&
-								   !__traits(hasMember, object.Object, member) /*dont want objects base methods*/)
-					{
-						static if (__traits(compiles, fullyQualifiedName2!(ReturnType!(overload)))) // Hack because of a bug in fullyQualifiedName
-						{
-							// Collect all argument in a tuple
-							string	parameters;
-							alias ParameterTypeTuple!(overload) MyParameterTypeTuple;
-
-							foreach (index, paramType; MyParameterTypeTuple)
-							{
-								static if (is(paramType : dquick.item.declarative_item.DeclarativeItem))
-									parameters ~= format("dquick.script.i_item_binding.IItemBinding param%d, ", index);
-								else
-									parameters ~= format("%s param%d, ", fullyQualifiedName2!(paramType), index);
-							}
-							parameters = chomp(parameters, ", ");
-
-							string	callParameters;
-							foreach (index, paramType; MyParameterTypeTuple)
-							{
-								static if (is(paramType : dquick.item.declarative_item.DeclarativeItem))
-									callParameters ~= format("cast(%s)(param%d.itemObject), ", fullyQualifiedName2!(paramType), index);
-								else
-									callParameters ~= format("param%d, ", index);
-							}
-							callParameters = chomp(callParameters, ", ");
-
-							result ~= format("%s	%s(%s)", fullyQualifiedName2!(ReturnType!(overload)), member, parameters);
-							result ~= format("{");
-							result ~= format("	return item.%s(%s);", member, callParameters);
-							result ~= format("}");
-						}
-					}
-				}
-			}
+			static if (__traits(compiles, generateMethodBinding!(T, member))) // Method
+				result ~= generateMethodBinding!(T, member);
 		}
 		static if (__traits(compiles, EnumMembers!(__traits(getMember, T, member))) && is(OriginalType!(__traits(getMember, T, member)) == int)) // If its an int enum
 		{
@@ -305,8 +269,87 @@ static string	genProperties(T, propertyTypes...)()
 	return result;
 }
 
-class ItemBinding(T) : dquick.script.i_item_binding.IItemBinding {
+string	generateFunctionOrMethodBinding(alias overload)()
+{
+	string result;
 
+	// Collect all argument in a tuple
+	string	parameters;
+	alias ParameterTypeTuple!(overload) MyParameterTypeTuple;
+
+	foreach (index, paramType; MyParameterTypeTuple)
+	{
+		static if (is(paramType == class) || is(paramType == interface))
+			parameters ~= format("dquick.script.item_binding.ItemBindingBase!(%s) param%d, ", fullyQualifiedName2!(paramType), index);
+		else
+			parameters ~= format("%s param%d, ", fullyQualifiedName2!(paramType), index);
+	}
+	parameters = chomp(parameters, ", ");
+
+	string	callParameters;
+	foreach (index, paramType; MyParameterTypeTuple)
+	{
+		static if (is(paramType == class) || is(paramType == interface))
+			callParameters ~= format("cast(%s)(param%d.itemObject), ", fullyQualifiedName2!(paramType), index);
+		else
+			callParameters ~= format("param%d, ", index);
+	}
+	callParameters = chomp(callParameters, ", ");
+
+	result ~= format("%s	%s(%s)\n", fullyQualifiedName2!(ReturnType!(overload)), __traits(identifier, overload), parameters);
+	result ~= format("{\nwriteln(\"wrapped function\");\n");
+	static if (__traits(isStaticFunction, overload))
+		result ~= format("	return %s(%s);\n", fullyQualifiedName2!(overload), callParameters);
+	else
+		result ~= format("	return item.%s(%s);\n", __traits(identifier, overload), callParameters);
+	result ~= format("}\n");
+
+	return result;
+}
+
+string	generateMethodBinding(T, string member)()
+{
+	string result;
+
+	foreach (overload; __traits(getOverloads, T, member)) 
+	{
+		static if (	isCallable!(overload) &&
+					isSomeFunction!(overload) &&
+				   !__traits(isStaticFunction, overload) &&
+					   !isDelegate!(overload) &&
+					   member != "__ctor" && member != "__dtor" /*dont want constructor nor destructor*/ &&
+					   !__traits(hasMember, object.Object, member) /*dont want objects base methods*/)
+		{
+			static if (__traits(compiles, fullyQualifiedName2!(ReturnType!(overload)))) // Hack because of a bug in fullyQualifiedName
+			{
+				result ~= generateFunctionOrMethodBinding!(overload);
+			}
+		}
+	}
+
+	return result;
+}
+
+template ItemBindingBaseTypeTuple2(A...) // Transform types in ItemBindingBases
+{
+	static if (A.length == 0)
+		alias A	ItemBindingBaseTypeTuple2;
+	else
+		alias TypeTuple!(ItemBindingBase!(A[0]), ItemBindingBaseTypeTuple2!(A[1 .. $])) ItemBindingBaseTypeTuple2;
+}
+
+template ItemBindingBaseTypeTuple(A) // Return base types transformed in ItemBindingBases
+{
+	alias ItemBindingBaseTypeTuple2!(BaseTypeTuple!(A))	ItemBindingBaseTypeTuple;
+}
+
+interface ItemBindingBase(T) : dquick.script.i_item_binding.IItemBinding, ItemBindingBaseTypeTuple!(T) // Proxy the T inheritance hierarchy
+{
+	Object	itemObject();
+}
+
+class ItemBinding(T) : ItemBindingBase!(T) // Proxy that auto bind T
+{
 	this(T item)
 	{
 		this.item = item;
@@ -370,6 +413,15 @@ class ItemBinding(T) : dquick.script.i_item_binding.IItemBinding {
 	//}
 
 	Object	itemObject() { return item;}
+
+	override void			dmlEngine(dquick.script.dml_engine_core.DMLEngineCore dmlEngine)
+	{
+		if (mDMLEngine != dmlEngine)
+		{
+			mDMLEngine = dmlEngine;
+			dmlEngine2.registerItem!T(item, this);
+		}
+	}
 
 	mixin(genProperties!(T, dquick.script.dml_engine.DMLEngine.propertyTypes));
 	
