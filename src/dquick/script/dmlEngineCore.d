@@ -164,11 +164,13 @@ version(unittest)
 
 unittest
 {
+	try
+	{
 	DMLEngineCore	dmlEngine = new DMLEngineCore;
 	dmlEngine.create();
 	dmlEngine.addObjectBindingType!(Item, "Item");
 
-	// Test basic item
+	/+// Test basic item
 	string lua1 = q"(
 		Item {
 			id = "item1"
@@ -411,8 +413,62 @@ unittest
 		dmlEngine.execute("testObject3.nativeSubItem = testObject5.nativeSubItem", "");
 		dmlEngine.execute("subItemGlobal8 = testObject3.nativeSubItem", "");
 		assert(dmlEngine.getLuaGlobal!SubItem("subItemGlobal8") is testObject5.nativeSubItem);
+	}+/
+
+
+	// Component
+	{
+		string lua = q"(
+			Button {
+				id = "item16",
+			}
+		)";
+		dmlEngine.execute(lua, "");
+	}
+
+	/+// This
+	{
+		string lua = q"(
+			Item {
+			id = "item16",
+				virtualProperty = 10,
+				nativeProperty = function()
+					return virtualProperty
+				end
+			}
+		)";
+		dmlEngine.execute(lua, "");
+		assert(dmlEngine.item!Item("item16").nativeProperty == 10);
+	}
+
+	// Parent
+	{
+		string lua = q"(
+			Item {
+				virtualProperty = 100,
+				Item {
+					id = "item17",
+					nativeProperty = function()
+						return parent.virtualProperty
+					end
+				}
+			}
+		)";
+		dmlEngine.execute(lua, "");
+		assert(dmlEngine.item!Item("item17").nativeProperty == 100);
+	}+/
+	}
+	catch (Throwable e)
+	{
+		writeln(e.toString());
 	}
 }
+
+string	button = q"(
+	Item {
+		id = "item1"
+	}
+)";
 
 class DMLEngineCore
 {
@@ -543,6 +599,19 @@ public:
 		lua_pushstring(luaState(), "__This");
 		lua_pushlightuserdata(luaState(), cast(void*)this);
 		lua_settable(luaState(), LUA_REGISTRYINDEX);
+
+
+		lua_getglobal(luaState(), "_G");
+		// Create metatable
+		lua_newtable(luaState());
+		{
+			// Call metamethod to instanciate type
+			lua_pushstring(luaState(), "__call");
+			lua_pushcfunction(luaState(), cast(lua_CFunction)&globalIndexLuaBind);
+			lua_settable(luaState(), -3);
+		}
+		lua_setmetatable(luaState(), -2);
+		lua_setglobal(luaState(), "_G");
 
 		initializationPhase = true;
 
@@ -1045,6 +1114,39 @@ extern(C)
 			assert(itemBinding !is null);
 
 			luaCallThisD!(methodName, T)(itemBinding, L, 1);
+
+			return 1;
+		}
+		catch (Throwable e)
+		{
+			writeln(e.toString());
+			return 0;
+		}
+	}
+
+	// Handle method binding
+	private int	globalIndexLuaBind(lua_State* L)
+	{
+		try
+		{
+			if (lua_gettop(L) != 2)
+				throw new Exception(format("too few param, got %d, expected at least 1\n", lua_gettop(L)));
+			if (!lua_isuserdata(L, 1))
+				throw new Exception("param 1 is not a userdata");
+
+
+			if (lua_isstring(L, 1) && to!(string)(lua_tostring(L, 1)) == "Button")
+			{
+				lua_pushstring(L, "__This");
+				lua_gettable(L, LUA_REGISTRYINDEX);
+				DMLEngineCore	dmlEngine = cast(DMLEngineCore)lua_touserdata(L, -1);
+				lua_pop(L, 1);
+
+			}
+			else
+			{
+				lua_getglobal(L, lua_tostring(L, 1));
+			}
 
 			return 1;
 		}
