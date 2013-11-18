@@ -137,7 +137,7 @@ version(unittest)
 
 unittest
 {
-	DMLEngine	dmlEngine = new DMLEngine;
+	/+DMLEngine	dmlEngine = new DMLEngine;
 	dmlEngine.create();
 	dmlEngine.addItemType!(Item, "Item");
 
@@ -385,7 +385,7 @@ unittest
 		dmlEngine.execute("testObject3.nativeSubItem = testObject5.nativeSubItem", "");
 		dmlEngine.execute("subItemGlobal8 = testObject3.nativeSubItem", "");
 		assert(dmlEngine.getLuaGlobal!SubItem("subItemGlobal8") is testObject5.nativeSubItem);
-	}
+	}+/
 }
 
 class DMLEngine : dquick.script.dmlEngineCore.DMLEngineCore

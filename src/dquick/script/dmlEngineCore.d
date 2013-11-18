@@ -170,14 +170,14 @@ unittest
 	dmlEngine.create();
 	dmlEngine.addObjectBindingType!(Item, "Item");
 
-	/+// Test basic item
+	// Test basic item
 	string lua1 = q"(
 		Item {
 			id = "item1"
 		}
 	)";
 	dmlEngine.execute(lua1, "");
-	assert(dmlEngine.itemBinding!Item("item1") !is null);
+	assert(dmlEngine.getLuaGlobal!Item("item1") !is null);
 	assert(dmlEngine.rootItemBinding() !is null);
 	assert(dmlEngine.rootItemBinding().id == "item1");
 
@@ -189,9 +189,9 @@ unittest
 		}
 	)";
 	dmlEngine.execute(lua2, "");
-	assert(dmlEngine.itemBinding!Item("item2").nativeProperty == 100);
+	assert(dmlEngine.getLuaGlobal!Item("item2").nativeProperty == 100);
 	dmlEngine.execute("item2.nativeProperty = item2.nativeProperty * 2", "");
-	assert(dmlEngine.itemBinding!Item("item2").nativeProperty == 200);
+	assert(dmlEngine.getLuaGlobal!Item("item2").nativeProperty == 200);
 
 	// Test virtual property
 	string lua3 = q"(
@@ -203,7 +203,7 @@ unittest
 		item3.nativeProperty = item3.virtualProperty + item3.nativeProperty
 	)";
 	dmlEngine.execute(lua3, "");
-	assert(dmlEngine.itemBinding!Item("item3").nativeProperty == 1100);
+	assert(dmlEngine.getLuaGlobal!Item("item3").nativeProperty == 1100);
 
 	// Test signals
 	string lua4 = q"(
@@ -223,7 +223,7 @@ unittest
 		item4.nativeProperty = 500
 	)";
 	dmlEngine.execute(lua4, "");
-	assert(dmlEngine.itemBinding!Item("item4").nativeTotalProperty == 10500);
+	assert(dmlEngine.getLuaGlobal!Item("item4").nativeTotalProperty == 10500);
 
 	// Test property binding
 	string lua5 = q"(
@@ -245,7 +245,7 @@ unittest
 		}
 	)";
 	dmlEngine.execute(lua5, "");
-	assert(dmlEngine.itemBinding!Item("item7").nativeTotalProperty == 175);
+	assert(dmlEngine.getLuaGlobal!Item("item7").nativeTotalProperty == 175);
 
 	// Test property binding loop detection
 	/*string lua6 = q"(
@@ -278,7 +278,7 @@ unittest
 		}
 	)";
 	dmlEngine.execute(lua7, "");
-	assert(dmlEngine.itemBinding!Item("item11").nativeEnumProperty == Item.Enum.enumVal2);
+	assert(dmlEngine.getLuaGlobal!Item("item11").nativeEnumProperty == Item.Enum.enumVal2);
 
 	// Test simple property alias (parent to child)
 	string lua8 = q"(
@@ -296,7 +296,7 @@ unittest
 		item12.nativePropertyAlias = 200
 	)";
 	dmlEngine.execute(lua8, "");
-	assert(dmlEngine.itemBinding!Item("item13").nativeProperty == 200);
+	assert(dmlEngine.getLuaGlobal!Item("item13").nativeProperty == 200);
 
 	// Test 2 ways property alias (parent to child and parent to child, usefull for buttons that can be checked from qml or mouse input)
 	string lua9 = q"(
@@ -321,13 +321,13 @@ unittest
 		}
 	)";
 	dmlEngine.execute(lua9, "");
-	assert(dmlEngine.itemBinding!Item("item15").nativeProperty == 100); // Test init value propagation
+	assert(dmlEngine.getLuaGlobal!Item("item15").nativeProperty == 100); // Test init value propagation
 
 	dmlEngine.execute("item14.nativePropertyAlias = 200", "");
-	assert(dmlEngine.itemBinding!Item("item15").nativeProperty == 200); // Test propagation from parent to child
+	assert(dmlEngine.getLuaGlobal!Item("item15").nativeProperty == 200); // Test propagation from parent to child
 
-	dmlEngine.itemBinding!Item("item15").nativeProperty = 300;
-	assert(dmlEngine.itemBinding!Item("item14").nativeTotalProperty == 300); // Test propagation from child to parent
+	dmlEngine.getLuaGlobal!Item("item15").nativeProperty = 300;
+	assert(dmlEngine.getLuaGlobal!Item("item14").nativeTotalProperty == 300); // Test propagation from child to parent
 
 	// Test function binding
 	dmlEngine.addFunction!(testSumFunctionBinding, "testSumFunctionBinding")();
@@ -413,17 +413,30 @@ unittest
 		dmlEngine.execute("testObject3.nativeSubItem = testObject5.nativeSubItem", "");
 		dmlEngine.execute("subItemGlobal8 = testObject3.nativeSubItem", "");
 		assert(dmlEngine.getLuaGlobal!SubItem("subItemGlobal8") is testObject5.nativeSubItem);
-	}+/
-
+	}
 
 	// Component
 	{
 		string lua = q"(
-			Button {
+			Item {
 				id = "item16",
+				Button {
+					id = "item17",
+					virtualProperty = 300,
+				},
+				Button {
+					id = "item18",
+					virtualProperty = 400,
+				},
 			}
 		)";
 		dmlEngine.execute(lua, "");
+		Item	item17 = dmlEngine.getLuaGlobal!Item("item17");
+		Item	item18 = dmlEngine.getLuaGlobal!Item("item18");
+		assert(item17 !is null);
+		assert(item18 !is null);
+		assert(item17.nativeProperty == 300);
+		assert(item18.nativeProperty == 400);
 	}
 
 	/+// This
@@ -438,7 +451,7 @@ unittest
 			}
 		)";
 		dmlEngine.execute(lua, "");
-		assert(dmlEngine.item!Item("item16").nativeProperty == 10);
+		assert(dmlEngine.getLuaGlobal!Item("item16").nativeProperty == 10);
 	}
 
 	// Parent
@@ -455,7 +468,7 @@ unittest
 			}
 		)";
 		dmlEngine.execute(lua, "");
-		assert(dmlEngine.item!Item("item17").nativeProperty == 100);
+		assert(dmlEngine.getLuaGlobal!Item("item17").nativeProperty == 100);
 	}+/
 	}
 	catch (Throwable e)
@@ -466,7 +479,17 @@ unittest
 
 string	button = q"(
 	Item {
-		id = "item1"
+		id = "buttonRoot",
+		virtualProperty = 200,
+		nativeProperty = function()
+			return button2.virtualProperty
+		end,
+		Item {
+			id = "button2",
+			virtualProperty = function()
+				return buttonRoot.virtualProperty
+			end,
+		}
 	}
 )";
 
@@ -489,9 +512,29 @@ public:
 		mLuaState = luaL_newstate();
 		luaL_openlibs(mLuaState);
 		lua_atpanic(mLuaState, cast(lua_CFunction)&luaPanicFunction);
-		initializationPhase = false;
+		initializationPhase = 0;
 		static if (showDebug)
 			lvl = 0;
+
+		//GC.disable();
+		//scope(exit) GC.enable();
+
+		lua_pushstring(luaState(), "__This");
+		lua_pushlightuserdata(luaState(), cast(void*)this);
+		lua_settable(luaState(), LUA_REGISTRYINDEX);
+
+
+		lua_getglobal(luaState(), "_G");
+		// Create metatable
+		lua_newtable(luaState());
+		{
+			// Call metamethod to instanciate type
+			lua_pushstring(luaState(), "__index");
+			lua_pushcfunction(luaState(), cast(lua_CFunction)&globalIndexLuaBind);
+			lua_settable(luaState(), -3);
+		}
+		lua_setmetatable(luaState(), -2);
+		lua_setglobal(luaState(), "_G");
 	}
 
 	void	destroy()
@@ -555,20 +598,15 @@ public:
 	void	addObjectBinding(T)(T object, string id = "")
 	{
 		static assert(is(T : dquick.script.iItemBinding.IItemBinding), "object must inherit from IItemBinding");
-
+		static assert(!is(T == dquick.script.iItemBinding.IItemBinding), "object must inherit from IItemBinding but not be an IItemBinding");
+			
 		addObjectBindingType!(T, "__dquick_reserved1");
 
 		if (object !is null)
 		{
-			object.dmlEngine = this;
-			object.creating = false;
+			object.dmlEngine = this;		
 			mVoidToDeclarativeItems[cast(void*)(object)] = object;
-			if (id != "")
-			{
-				if (id in mIdToDeclarativeItems)
-					throw new Exception(format("an object with id \"%s\" already exist\n", id));
-				mIdToDeclarativeItems[id] = cast(dquick.script.iItemBinding.IItemBinding)object;
-			}
+			mLastItemBindingCreated = object;
 		}
 
 		if (id != "")
@@ -589,34 +627,9 @@ public:
 		execute(text, filePath);
 	}
 
-	void	execute(string text, string filePath)
+	void	load(string text, string filePath)
 	{
 		assert(isCreated());
-
-		//GC.disable();
-		//scope(exit) GC.enable();
-
-		lua_pushstring(luaState(), "__This");
-		lua_pushlightuserdata(luaState(), cast(void*)this);
-		lua_settable(luaState(), LUA_REGISTRYINDEX);
-
-
-		lua_getglobal(luaState(), "_G");
-		// Create metatable
-		lua_newtable(luaState());
-		{
-			// Call metamethod to instanciate type
-			lua_pushstring(luaState(), "__call");
-			lua_pushcfunction(luaState(), cast(lua_CFunction)&globalIndexLuaBind);
-			lua_settable(luaState(), -3);
-		}
-		lua_setmetatable(luaState(), -2);
-		lua_setglobal(luaState(), "_G");
-
-		initializationPhase = true;
-
-		static if (showDebug)
-			writeln("CREATE ==================================================================================================");
 
 		if (luaL_loadbuffer(luaState(), cast(const char*)text.ptr, text.length, filePath.toStringz()) != LUA_OK)
 		{
@@ -630,6 +643,20 @@ public:
 				return;
 			}
 		}
+	}
+
+	void	execute()
+	{
+		assert(isCreated());
+
+		initializationPhase++;
+
+		// Save _ENV
+		lua_getupvalue(luaState(), -1, 1);
+		mEnvStack ~= luaL_ref(luaState(), LUA_REGISTRYINDEX);
+
+		static if (showDebug)
+			writeln("CREATE ==================================================================================================");
 
 		if (lua_pcall(luaState(), 0, LUA_MULTRET, 0) != LUA_OK)
 		{
@@ -644,19 +671,31 @@ public:
 			}
 		}
 
-		static if (showDebug)
-			writeln("INIT ==================================================================================================");
-		foreach (key, binding; mVoidToDeclarativeItems)
-			binding.executeBindings();
-		initializationPhase = false;
-
-		static if (showDebug)
+		if (initializationPhase == 1)
 		{
-			writeln("DEPENDANCY TREE ==================================================================================================");
-			foreach (key, bindingRef; mItemsToItemBindings)
-				writefln("%s\n%s", key, shiftRight(bindingRef.iItemBinding.displayDependents(), "\t", 1));
-			writeln("=======================================================================================================");
+			static if (showDebug)
+				writeln("INIT ==================================================================================================");
+			foreach (key, binding; mVoidToDeclarativeItems)
+				binding.executeBindings();
+
+			static if (showDebug)
+			{
+				writeln("DEPENDANCY TREE ==================================================================================================");
+				foreach (key, bindingRef; mItemsToItemBindings)
+					writefln("%s\n%s", key, shiftRight(bindingRef.iItemBinding.displayDependents(), "\t", 1));
+				writeln("=======================================================================================================");
+			}
 		}
+		initializationPhase--;
+		luaL_unref(luaState(), LUA_REGISTRYINDEX, mEnvStack[mEnvStack.length - 1]);
+
+		mEnvStack.length--;
+	}
+
+	void	execute(string text, string filePath)
+	{
+		load(text, filePath);
+		execute();
 	}
 
 	void	execute(int functionRef)
@@ -684,21 +723,7 @@ public:
 
 	DeclarativeItem	rootItemBinding()
 	{
-		foreach (key, binding; mVoidToDeclarativeItems)
-		{
-			DeclarativeItem	declarativeItem = cast(DeclarativeItem)(binding);
-			if (declarativeItem && declarativeItem.parent() is null)
-				return declarativeItem;
-		}
-		return null;
-	}
-
-	T	itemBinding(T)(string id)
-	{
-		auto iItemBinding = mIdToDeclarativeItems[id];
-		if (iItemBinding !is null)
-			return cast(T)(iItemBinding);
-		return null;
+		return cast(DeclarativeItem)(mLastItemBindingCreated);
 	}
 
 	T	getLuaGlobal(T)(string name)
@@ -706,8 +731,9 @@ public:
 		lua_getglobal(mLuaState, name.toStringz());
 		if (lua_isnone(mLuaState, -1) || lua_isnil(mLuaState, -1))
 			throw new Exception(format("global \"%s\" is nil\n", name));
-
-		return dquick.script.utils.valueFromLua!T(mLuaState, -1);
+		T	value = dquick.script.utils.valueFromLua!T(mLuaState, -1);
+		lua_pop(mLuaState, 1);
+		return value;
 	}
 
 	void	setLuaGlobal(T)(string name, T value)
@@ -719,13 +745,14 @@ public:
 	static immutable bool showDebug = 0;
 protected:
 	dquick.script.iItemBinding.IItemBinding[void*]	mVoidToDeclarativeItems;
-	dquick.script.iItemBinding.IItemBinding[string]	mIdToDeclarativeItems;
+	dquick.script.iItemBinding.IItemBinding			mLastItemBindingCreated;
+	int[]		mEnvStack;
 	lua_State*	mLuaState;
 	IWindow		mWindow;
 	package dquick.script.propertyBinding.PropertyBinding[]		currentlyExecutedBindingStack;
 	string		itemTypeIds;
 	package alias TypeTuple!(int, float, string, bool, Object)	propertyTypes;
-	package bool	initializationPhase;
+	package int	initializationPhase;
 	static if (showDebug)
 		package int	lvl;
 }
@@ -780,131 +807,26 @@ extern(C)
 
 			T	itemBinding = new T();
 			itemBinding.dmlEngine = dmlEngine;
-			itemBinding.creating = true;
 
-			/* table is in the stack at index 't' */
-			lua_pushnil(L);  /* first key */
-			while (lua_next(L, -2) != 0) {
-				/* uses 'key' (at index -2) and 'value' (at index -1) */
+			lua_remove(L, 1);
+			itemBinding.valueFromLua(L);
 
-				if (lua_type(L, -2) == LUA_TSTRING)
-				{
-					string	key = to!(string)(lua_tostring(L, -2));
+			dmlEngine.addObjectBinding!T(itemBinding);
 
-					if (key == "id")
-					{
-						itemBinding.id = to!(string)(lua_tostring(L, -1));
-					}
-					else
-					{
-						bool	found = false;
-						foreach (member; __traits(allMembers, typeof(itemBinding)))
-						{
-							static if (is(typeof(__traits(getMember, itemBinding, member)) : dquick.script.propertyBinding.PropertyBinding))
-							{
-								if (key == getPropertyNameFromPropertyDeclaration(member))
-								{
-									found = true;
-									__traits(getMember, itemBinding, member).bindingFromLua(L, -1);
-									break;
-								}
-								else if (key == getSignalNameFromPropertyName(getPropertyNameFromPropertyDeclaration(member)))
-								{
-									found = true;
+			dquick.script.utils.valueToLua!T(L, itemBinding);
 
-									if (lua_isfunction(L, -1))
-									{
-										__traits(getMember, itemBinding, member).slotLuaReference = luaL_ref(L, LUA_REGISTRYINDEX);
-										lua_pushnil(L); // To compensate the value poped by luaL_ref
-									}
-									else
-										writefln("createLuaBind:: Attribute %s is not a function", key);
-									break;
-								}
-							}
-						}
+			// Set global from id
+			if (itemBinding.id != "")
+			{
+				// Get _ENV
+				lua_rawgeti(L, LUA_REGISTRYINDEX, dmlEngine.mEnvStack[dmlEngine.mEnvStack.length - 1]);
 
-						if (found == false)
-						{
-							auto	propertyName = getPropertyNameFromSignalName(key);
-							if (propertyName != "")
-							{
-								found = true;
+				lua_pushstring(L, itemBinding.id.toStringz());
+				lua_pushvalue(L, -3);
 
-								if (lua_isfunction(L, -1))
-								{
-									dquick.script.virtualPropertyBinding.VirtualPropertyBinding virtualProperty;
-									auto virtualPropertyPtr = (propertyName in itemBinding.virtualProperties);
-									if (!virtualPropertyPtr)
-									{
-										virtualProperty = new dquick.script.virtualPropertyBinding.VirtualPropertyBinding(itemBinding, propertyName);
-										itemBinding.virtualProperties[propertyName] = virtualProperty;
-									}
-									else
-									{
-										virtualProperty = *virtualPropertyPtr;
-									}
-									virtualProperty.slotLuaReference = luaL_ref(L, LUA_REGISTRYINDEX);
-									lua_pushnil(L); // To compensate the value poped by luaL_ref
-								}
-								else
-									writefln("createLuaBind:: Attribute %s is not a function", key);
-							}
-							else
-							{
-								dquick.script.virtualPropertyBinding.VirtualPropertyBinding virtualProperty;
-								auto virtualPropertyPtr = (key in itemBinding.virtualProperties);
-								if (!virtualPropertyPtr)
-								{
-									virtualProperty = new dquick.script.virtualPropertyBinding.VirtualPropertyBinding(itemBinding, key);
-									itemBinding.virtualProperties[key] = virtualProperty;
-								}
-								else
-								{
-									virtualProperty = *virtualPropertyPtr;
-								}
-								virtualProperty.bindingFromLua(L, -1);
-							}
-						}
-					}
-				}
-				else if (lua_type(L, -2) == LUA_TNUMBER)
-				{
-					void*	itemBindingPtr = *(cast(void**)lua_touserdata(L, -1));
-					auto	child = cast(dquick.script.iItemBinding.IItemBinding)(itemBindingPtr);
-					if (child is null)
-					{
-						writefln("createLuaBind:: can't find item at key \"%d\"\n", lua_type(L, -2));
-						return 0;
-					}
-
-					static if (__traits(hasMember, T, "addChild") == false)
-					{
-						writefln("createLuaBind:: can't add item at key \"%d\" as child without addChild method\n", lua_type(L, -2));
-						return 0;
-					}
-
-					foreach (overload; __traits(getOverloads, T, "addChild")) 
-					{
-						alias ParameterTypeTuple!(overload) MyParameterTypeTuple;
-						static if (MyParameterTypeTuple.length == 1)
-						{
-							DeclarativeItem	test = cast(DeclarativeItem)child;
-							MyParameterTypeTuple[0]	castedItemBinding = cast(MyParameterTypeTuple[0])(child);
-							if (castedItemBinding !is null)
-								__traits(getMember, itemBinding, "addChild")(castedItemBinding);
-						}
-					}
-				}
-
-				/* removes 'value'; keeps 'key' for next iteration */
+				lua_settable(L, -3);
 				lua_pop(L, 1);
 			}
-			lua_pop(L, 1); // Remove param 1 (table)
-
-			itemBinding.creating = false;
-			dmlEngine.addObjectBinding!T(itemBinding, itemBinding.id);
-			lua_getglobal(L, itemBinding.id.toStringz());
 
 			return 1;
 		}
@@ -1124,28 +1046,122 @@ extern(C)
 		}
 	}
 
-	// Handle method binding
 	private int	globalIndexLuaBind(lua_State* L)
 	{
 		try
 		{
 			if (lua_gettop(L) != 2)
 				throw new Exception(format("too few param, got %d, expected at least 1\n", lua_gettop(L)));
-			if (!lua_isuserdata(L, 1))
-				throw new Exception("param 1 is not a userdata");
+			if (!lua_istable(L, 1))
+				throw new Exception("param 1 is not a table");
+			if (!lua_isstring(L, 2))
+				throw new Exception("param 1 is not a string");
 
+			const(char)*	key = lua_tostring(L, 2);
+			lua_pop(L, 1);
+			lua_pop(L, 1);
 
-			if (lua_isstring(L, 1) && to!(string)(lua_tostring(L, 1)) == "Button")
+			if (to!(string)(key) == "Button")
 			{
 				lua_pushstring(L, "__This");
 				lua_gettable(L, LUA_REGISTRYINDEX);
 				DMLEngineCore	dmlEngine = cast(DMLEngineCore)lua_touserdata(L, -1);
 				lua_pop(L, 1);
 
+				lua_pushcfunction(L, cast(lua_CFunction)&createComponentLuaBind);
 			}
 			else
 			{
-				lua_getglobal(L, lua_tostring(L, 1));
+				writefln("globalIndexLuaBind");
+
+				lua_rawgeti(L, LUA_REGISTRYINDEX, LUA_RIDX_GLOBALS);
+				lua_pushstring(L, key);
+				lua_rawget(L, -2);
+			}
+
+			return 1;
+		}
+		catch (Throwable e)
+		{
+			writeln(e.toString());
+			return 0;
+		}
+	}
+
+	private int	createComponentLuaBind(lua_State* L)
+	{
+		try
+		{
+			if (lua_gettop(L) != 1)
+				throw new Exception(format("createComponentLuaBind:: too few or too many param, got %d, expected 1\n", lua_gettop(L)));
+			if (!lua_istable(L, 1))
+				throw new Exception("createComponentLuaBind:: the lua value is not a table\n");
+
+			lua_pushstring(L, "__This");
+			lua_gettable(L, LUA_REGISTRYINDEX);
+			DMLEngineCore	dmlEngine = cast(DMLEngineCore)lua_touserdata(L, -1);
+			lua_pop(L, 1);
+
+			// Load env chaining __index function
+			string	lua = q"(
+				__env_chaining_index = function (_, n)
+				    local localRawGet = rawget(_, n)
+					if localRawGet == nil then
+						print("up "..n)
+						--print(_ENV[n])
+						return _ENV[n]
+					else
+						print("local "..n)
+						--print(localRawGet)
+						return localRawGet
+					end
+				end
+			)";
+			dmlEngine.load(lua, "");
+			dmlEngine.execute();
+
+			// Load component code
+			dmlEngine.load(button, "");
+
+			// Create new _ENV table
+			lua_newtable(dmlEngine.luaState());
+			// Create new _ENV's metatable
+			lua_newtable(dmlEngine.luaState());
+			{
+				// __index metamethod to chain lookup to the parent env
+				lua_pushstring(dmlEngine.luaState(), "__index");
+				lua_getglobal(dmlEngine.luaState(), "__env_chaining_index");
+				lua_settable(dmlEngine.luaState(), -3);
+			}
+			lua_setmetatable(dmlEngine.luaState(), -2);
+
+			// Set table to _ENV upvalue
+			lua_setupvalue(dmlEngine.luaState(), -2, 1);
+			// Execute component code
+			dmlEngine.execute();
+
+			DeclarativeItem	declarativeItem = dmlEngine.rootItemBinding();
+			if (declarativeItem is null)
+				throw new Exception("\"Button\" component had no root item");
+			string	componentId = declarativeItem.id;
+
+			dquick.script.iItemBinding.IItemBinding	iItemBinding = cast(dquick.script.iItemBinding.IItemBinding)declarativeItem;
+			assert(iItemBinding !is null);
+
+			iItemBinding.valueFromLua(L);
+			iItemBinding.pushToLua(L);
+
+			// Set global from id
+			if (declarativeItem.id != "")
+			{
+				// Get _ENV
+				lua_rawgeti(L, LUA_REGISTRYINDEX, dmlEngine.mEnvStack[dmlEngine.mEnvStack.length - 1]);
+				lua_pushstring(L, declarativeItem.id.toStringz());
+
+				lua_pushvalue(L, -3);
+
+				lua_settable(L, -3);
+				lua_pop(L, 1);
 			}
 
 			return 1;
