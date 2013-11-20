@@ -171,7 +171,7 @@ unittest
 	dmlEngine.addObjectBindingType!(Item, "Item");
 
 	// Test basic item
-	string lua1 = q"(
+	/+string lua1 = q"(
 		Item {
 			id = "item1"
 		}
@@ -437,13 +437,28 @@ unittest
 		assert(item18 !is null);
 		assert(item17.nativeProperty == 300);
 		assert(item18.nativeProperty == 400);
-	}
+	}+/
 
-	/+// This
+	/+// Explicit this
 	{
 		string lua = q"(
 			Item {
-			id = "item16",
+				id = "item19",
+				virtualProperty = 10,
+				nativeProperty = function()
+					return this.virtualProperty
+				end
+			}
+		)";
+		dmlEngine.execute(lua, "");
+		assert(dmlEngine.getLuaGlobal!Item("item19").nativeProperty == 10);
+	}
+
+	// Implicit this
+	{
+		string lua = q"(
+			Item {
+				id = "item20",
 				virtualProperty = 10,
 				nativeProperty = function()
 					return virtualProperty
@@ -451,25 +466,26 @@ unittest
 			}
 		)";
 		dmlEngine.execute(lua, "");
-		assert(dmlEngine.getLuaGlobal!Item("item16").nativeProperty == 10);
-	}
+		assert(dmlEngine.getLuaGlobal!Item("item20").nativeProperty == 10);
+	}+/
 
 	// Parent
 	{
 		string lua = q"(
 			Item {
+				id = "item22",
 				virtualProperty = 100,
 				Item {
-					id = "item17",
+					id = "item21",
 					nativeProperty = function()
-						return parent.virtualProperty
+						return this.parent.virtualProperty
 					end
 				}
 			}
 		)";
 		dmlEngine.execute(lua, "");
-		assert(dmlEngine.getLuaGlobal!Item("item17").nativeProperty == 100);
-	}+/
+		assert(dmlEngine.getLuaGlobal!Item("item21").nativeProperty == 100);
+	}
 	}
 	catch (Throwable e)
 	{

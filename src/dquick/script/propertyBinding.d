@@ -31,6 +31,78 @@ class PropertyBinding
 		if (_luaReference != -1)
 			luaL_unref(itemBinding.dmlEngine.luaState(), LUA_REGISTRYINDEX, _luaReference);
 		_luaReference = luaRef;
+		if (_luaReference != -1)
+		{
+writefln("top 1 = %d", lua_gettop(itemBinding.dmlEngine.luaState()));
+
+
+
+writefln("top 2 = %d", lua_gettop(itemBinding.dmlEngine.luaState()));
+
+			// Load env lookup function to handle this and parent
+			string	lua = q"(
+				__item_index = function (_, n)
+					if n == "this" then
+						return rawget(_, n)
+					else 
+						local itemMemberVal = rawget(_, "this")[n];
+						if itemMemberVal == nil then
+							return _ENV[n]
+						else
+							return itemMemberVal
+						end
+					end
+				end
+			)";
+			itemBinding.dmlEngine.load(lua, "");
+			itemBinding.dmlEngine.execute();
+
+writefln("top 3 = %d", lua_gettop(itemBinding.dmlEngine.luaState()));
+
+			lua_rawgeti(itemBinding.dmlEngine.luaState(), LUA_REGISTRYINDEX, _luaReference);
+
+writefln("top 4 = %d", lua_gettop(itemBinding.dmlEngine.luaState()));
+
+			// Create new _ENV table
+			lua_newtable(itemBinding.dmlEngine.luaState());
+
+writefln("top 5 = %d", lua_gettop(itemBinding.dmlEngine.luaState()));
+
+			// this global
+			lua_pushstring(itemBinding.dmlEngine.luaState(), "this");
+			itemBinding.pushToLua(itemBinding.dmlEngine.luaState());
+			lua_settable(itemBinding.dmlEngine.luaState(), -3);
+
+writefln("top 6 = %d", lua_gettop(itemBinding.dmlEngine.luaState()));
+
+			// Create new _ENV's metatable
+			lua_newtable(itemBinding.dmlEngine.luaState());
+
+writefln("top 7 = %d", lua_gettop(itemBinding.dmlEngine.luaState()));
+
+			{
+				// __index metamethod to chain lookup to the parent env
+				lua_pushstring(itemBinding.dmlEngine.luaState(), "__index");
+				lua_getglobal(itemBinding.dmlEngine.luaState(), "__item_index");
+				lua_settable(itemBinding.dmlEngine.luaState(), -3);
+writefln("top 8 = %d", lua_gettop(itemBinding.dmlEngine.luaState()));
+
+			}
+			lua_setmetatable(itemBinding.dmlEngine.luaState(), -2);
+
+writefln("top 9 = %d", lua_gettop(itemBinding.dmlEngine.luaState()));
+
+			// Set table to _ENV upvalue
+			const char*	envUpvalue = lua_setupvalue(itemBinding.dmlEngine.luaState(), -2, 1);
+			if (envUpvalue == null) // No access to env, env table is still on the stack so we need to pop it
+				lua_pop(itemBinding.dmlEngine.luaState(), 1);
+
+writefln("top 10 = %d", lua_gettop(itemBinding.dmlEngine.luaState()));
+
+			lua_pop(itemBinding.dmlEngine.luaState(), 1);
+
+			writefln("top 11 = %d", lua_gettop(itemBinding.dmlEngine.luaState()));
+		}
 	}
 	int		luaReference()
 	{

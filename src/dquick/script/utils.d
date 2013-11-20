@@ -176,23 +176,30 @@ void	valueToLua(T)(lua_State* L, T value)
 		lua_pushboolean(L, value);
 	else static if (is(T : dquick.script.iItemBinding.IItemBinding))
 	{
-		// Create a userdata that contains instance ptr and make it a global for user access
-		// It also contains a metatable for the member read and write acces
-		dquick.script.iItemBinding.IItemBinding	iItemBinding = cast(dquick.script.iItemBinding.IItemBinding)value;
-		void*	iItemBindingVoidPtr = cast(void*)(iItemBinding);
-		void*	userData = lua_newuserdata(L, iItemBindingVoidPtr.sizeof);
-		memcpy(userData, &iItemBindingVoidPtr, iItemBindingVoidPtr.sizeof);
+		if (value is null)
+			lua_pushnil(L);
+		else
+		{
+			DeclarativeItem	ditem = cast(DeclarativeItem)value;
 
-		lua_newtable(L);
+			// Create a userdata that contains instance ptr and make it a global for user access
+			// It also contains a metatable for the member read and write acces
+			dquick.script.iItemBinding.IItemBinding	iItemBinding = cast(dquick.script.iItemBinding.IItemBinding)value;
+			void*	iItemBindingVoidPtr = cast(void*)(iItemBinding);
+			void*	userData = lua_newuserdata(L, iItemBindingVoidPtr.sizeof);
+			memcpy(userData, &iItemBindingVoidPtr, iItemBindingVoidPtr.sizeof);
 
-		lua_pushstring(L, "__index");
-		lua_pushcfunction(L, cast(lua_CFunction)&dquick.script.dmlEngineCore.indexLuaBind!T);
-		lua_settable(L, -3);
-		lua_pushstring(L, "__newindex");
-		lua_pushcfunction(L, cast(lua_CFunction)&dquick.script.dmlEngineCore.newindexLuaBind!T);
-		lua_settable(L, -3);
+			lua_newtable(L);
 
-		lua_setmetatable(L, -2);
+			lua_pushstring(L, "__index");
+			lua_pushcfunction(L, cast(lua_CFunction)&dquick.script.dmlEngineCore.indexLuaBind!T);
+			lua_settable(L, -3);
+			lua_pushstring(L, "__newindex");
+			lua_pushcfunction(L, cast(lua_CFunction)&dquick.script.dmlEngineCore.newindexLuaBind!T);
+			lua_settable(L, -3);
+
+			lua_setmetatable(L, -2);
+		}
 	}
 	else
 	{
