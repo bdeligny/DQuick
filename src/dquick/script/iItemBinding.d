@@ -13,5 +13,5 @@ interface IItemBinding {
 	bool	creating();
 	void	valueFromLua(lua_State* L);
 	void	pushToLua(lua_State* L);
-	int		luaEnvReference();
+	int		itemBindingLuaEnvReference();
 }

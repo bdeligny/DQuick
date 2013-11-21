@@ -31,85 +31,6 @@ class PropertyBinding
 		if (_luaReference != -1)
 			luaL_unref(itemBinding.dmlEngine.luaState(), LUA_REGISTRYINDEX, _luaReference);
 		_luaReference = luaRef;
-		if (_luaReference != -1)
-		{
-			// Load env lookup function to handle this and parent
-			string	lua = q"(
-				__item_index = function (_, n)
-					if n == "this" then
-						return rawget(_, n)
-					else 
-						local itemMemberVal = rawget(_, "this")[n];
-						if itemMemberVal == nil then
-							return _ENV[n]
-						else
-							return itemMemberVal
-						end
-					end
-				end
-				__item_newindex = function (_, n, v)
-					assert(n ~= "this")
-					local this = rawget(_, "this")
-					if this[n] == nil then
-						_ENV[n] = v
-					else
-						this[n] = v
-					end
-				end
-			)";
-			itemBinding.dmlEngine.load(lua, "");
-			itemBinding.dmlEngine.execute();
-
-			lua_rawgeti(itemBinding.dmlEngine.luaState(), LUA_REGISTRYINDEX, _luaReference);
-
-			// Create new _ENV table
-			lua_newtable(itemBinding.dmlEngine.luaState());
-
-			// this global
-			lua_pushstring(itemBinding.dmlEngine.luaState(), "this");
-			itemBinding.pushToLua(itemBinding.dmlEngine.luaState());
-			lua_settable(itemBinding.dmlEngine.luaState(), -3);
-
-			// Create new _ENV's metatable
-			lua_newtable(itemBinding.dmlEngine.luaState());
-			{
-				{
-					// __index metamethod to chain lookup to the parent env
-					lua_pushstring(itemBinding.dmlEngine.luaState(), "__index");
-					lua_getglobal(itemBinding.dmlEngine.luaState(), "__item_index");
-
-					// Put component env
-					lua_rawgeti(itemBinding.dmlEngine.luaState(), LUA_REGISTRYINDEX, itemBinding.dmlEngine.mEnvStack[itemBinding.dmlEngine.mEnvStack.length - 1]);
-					const char*	envUpvalue = lua_setupvalue(itemBinding.dmlEngine.luaState(), -2, 1);
-					if (envUpvalue == null) // No access to env, env table is still on the stack so we need to pop it
-						lua_pop(itemBinding.dmlEngine.luaState(), 1);
-
-					lua_settable(itemBinding.dmlEngine.luaState(), -3);
-				}
-
-				{
-					// __newindex metamethod to chain assign to the parent env
-					lua_pushstring(itemBinding.dmlEngine.luaState(), "__newindex");
-					lua_getglobal(itemBinding.dmlEngine.luaState(), "__item_newindex");
-
-					// Put component env
-					lua_rawgeti(itemBinding.dmlEngine.luaState(), LUA_REGISTRYINDEX, itemBinding.dmlEngine.mEnvStack[itemBinding.dmlEngine.mEnvStack.length - 1]);
-					const char*	envUpvalue = lua_setupvalue(itemBinding.dmlEngine.luaState(), -2, 1);
-					if (envUpvalue == null) // No access to env, env table is still on the stack so we need to pop it
-						lua_pop(itemBinding.dmlEngine.luaState(), 1);
-
-					lua_settable(itemBinding.dmlEngine.luaState(), -3);
-				}
-			}
-			lua_setmetatable(itemBinding.dmlEngine.luaState(), -2);
-
-			// Set table to _ENV upvalue
-			const char*	envUpvalue = lua_setupvalue(itemBinding.dmlEngine.luaState(), -2, 1);
-			if (envUpvalue == null) // No access to env, env table is still on the stack so we need to pop it
-				lua_pop(itemBinding.dmlEngine.luaState(), 1);
-
-			lua_pop(itemBinding.dmlEngine.luaState(), 1);
-		}
 	}
 	int		luaReference()
 	{
@@ -286,6 +207,12 @@ class PropertyBinding
 	{
 		if (lua_isfunction(L, index)) // Binding is a lua function
 		{
+			// Set _ENV upvalue
+			lua_rawgeti(L, LUA_REGISTRYINDEX, itemBinding.itemBindingLuaEnvReference);
+			const char*	envUpvalue = lua_setupvalue(L, -2, 1);
+			if (envUpvalue == null) // No access to env, env table is still on the stack so we need to pop it
+				lua_pop(L, 1);
+
 			luaReference = luaL_ref(L, LUA_REGISTRYINDEX);
 			lua_pushnil(L); // To compensate the value poped by luaL_ref
 		}
