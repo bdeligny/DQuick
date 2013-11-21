@@ -33,12 +33,6 @@ class PropertyBinding
 		_luaReference = luaRef;
 		if (_luaReference != -1)
 		{
-writefln("top 1 = %d", lua_gettop(itemBinding.dmlEngine.luaState()));
-
-
-
-writefln("top 2 = %d", lua_gettop(itemBinding.dmlEngine.luaState()));
-
 			// Load env lookup function to handle this and parent
 			string	lua = q"(
 				__item_index = function (_, n)
@@ -53,55 +47,68 @@ writefln("top 2 = %d", lua_gettop(itemBinding.dmlEngine.luaState()));
 						end
 					end
 				end
+				__item_newindex = function (_, n, v)
+					assert(n ~= "this")
+					local this = rawget(_, "this")
+					if this[n] == nil then
+						_ENV[n] = v
+					else
+						this[n] = v
+					end
+				end
 			)";
 			itemBinding.dmlEngine.load(lua, "");
 			itemBinding.dmlEngine.execute();
 
-writefln("top 3 = %d", lua_gettop(itemBinding.dmlEngine.luaState()));
-
 			lua_rawgeti(itemBinding.dmlEngine.luaState(), LUA_REGISTRYINDEX, _luaReference);
-
-writefln("top 4 = %d", lua_gettop(itemBinding.dmlEngine.luaState()));
 
 			// Create new _ENV table
 			lua_newtable(itemBinding.dmlEngine.luaState());
-
-writefln("top 5 = %d", lua_gettop(itemBinding.dmlEngine.luaState()));
 
 			// this global
 			lua_pushstring(itemBinding.dmlEngine.luaState(), "this");
 			itemBinding.pushToLua(itemBinding.dmlEngine.luaState());
 			lua_settable(itemBinding.dmlEngine.luaState(), -3);
 
-writefln("top 6 = %d", lua_gettop(itemBinding.dmlEngine.luaState()));
-
 			// Create new _ENV's metatable
 			lua_newtable(itemBinding.dmlEngine.luaState());
-
-writefln("top 7 = %d", lua_gettop(itemBinding.dmlEngine.luaState()));
-
 			{
-				// __index metamethod to chain lookup to the parent env
-				lua_pushstring(itemBinding.dmlEngine.luaState(), "__index");
-				lua_getglobal(itemBinding.dmlEngine.luaState(), "__item_index");
-				lua_settable(itemBinding.dmlEngine.luaState(), -3);
-writefln("top 8 = %d", lua_gettop(itemBinding.dmlEngine.luaState()));
+				{
+					// __index metamethod to chain lookup to the parent env
+					lua_pushstring(itemBinding.dmlEngine.luaState(), "__index");
+					lua_getglobal(itemBinding.dmlEngine.luaState(), "__item_index");
 
+					// Put component env
+					lua_rawgeti(itemBinding.dmlEngine.luaState(), LUA_REGISTRYINDEX, itemBinding.dmlEngine.mEnvStack[itemBinding.dmlEngine.mEnvStack.length - 1]);
+					const char*	envUpvalue = lua_setupvalue(itemBinding.dmlEngine.luaState(), -2, 1);
+					if (envUpvalue == null) // No access to env, env table is still on the stack so we need to pop it
+						lua_pop(itemBinding.dmlEngine.luaState(), 1);
+
+					lua_settable(itemBinding.dmlEngine.luaState(), -3);
+				}
+
+				{
+					// __newindex metamethod to chain assign to the parent env
+					lua_pushstring(itemBinding.dmlEngine.luaState(), "__newindex");
+					lua_getglobal(itemBinding.dmlEngine.luaState(), "__item_newindex");
+
+					// Put component env
+					lua_rawgeti(itemBinding.dmlEngine.luaState(), LUA_REGISTRYINDEX, itemBinding.dmlEngine.mEnvStack[itemBinding.dmlEngine.mEnvStack.length - 1]);
+					const char*	envUpvalue = lua_setupvalue(itemBinding.dmlEngine.luaState(), -2, 1);
+					if (envUpvalue == null) // No access to env, env table is still on the stack so we need to pop it
+						lua_pop(itemBinding.dmlEngine.luaState(), 1);
+
+					lua_settable(itemBinding.dmlEngine.luaState(), -3);
+				}
 			}
 			lua_setmetatable(itemBinding.dmlEngine.luaState(), -2);
-
-writefln("top 9 = %d", lua_gettop(itemBinding.dmlEngine.luaState()));
 
 			// Set table to _ENV upvalue
 			const char*	envUpvalue = lua_setupvalue(itemBinding.dmlEngine.luaState(), -2, 1);
 			if (envUpvalue == null) // No access to env, env table is still on the stack so we need to pop it
 				lua_pop(itemBinding.dmlEngine.luaState(), 1);
 
-writefln("top 10 = %d", lua_gettop(itemBinding.dmlEngine.luaState()));
-
 			lua_pop(itemBinding.dmlEngine.luaState(), 1);
-
-			writefln("top 11 = %d", lua_gettop(itemBinding.dmlEngine.luaState()));
 		}
 	}
 	int		luaReference()
@@ -198,15 +205,16 @@ writefln("top 10 = %d", lua_gettop(itemBinding.dmlEngine.luaState()));
 			lua_rawgeti(itemBinding.dmlEngine.luaState(), LUA_REGISTRYINDEX, luaReference);
 			if (lua_pcall(itemBinding.dmlEngine.luaState(), 0, LUA_MULTRET, 0) != LUA_OK)
 			{
-				const char* error = lua_tostring(itemBinding.dmlEngine.luaState(), -1);
-				writeln("DMLEngine.IItemBinding.PropertyBinding.executeBinding: error: " ~ to!(string)(error));
-				assert(false);
 				version (release)
 				{
 					currentlyExecutedBindingStack.length--;
 					dependencies.clear();
 					return;
 				}
+
+				string error = to!(string)(lua_tostring(itemBinding.dmlEngine.luaState(), -1));
+				lua_pop(itemBinding.dmlEngine.luaState(), 1);
+				throw new Exception(format("lua_pcall error: %s", error));
 			}
 			scope(exit) lua_pop(itemBinding.dmlEngine.luaState(), lua_gettop(itemBinding.dmlEngine.luaState()) - top);
 

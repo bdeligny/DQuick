@@ -114,7 +114,6 @@ static string	ITEM_BINDING()
 
 						if (found == false)
 						{
-							writefln("key = %s", key);
 							auto	propertyName = getPropertyNameFromSignalName(key);
 							if (propertyName != "")
 							{
@@ -191,6 +190,12 @@ static string	ITEM_BINDING()
 		override void pushToLua(lua_State* L)
 		{
 			dquick.script.utils.valueToLua!(typeof(this))(L, this);
+		}
+
+		int	mLuaEnvReference;
+		override int	luaEnvReference()
+		{
+			return mLuaEnvReference;
 		}
 	)";
 }

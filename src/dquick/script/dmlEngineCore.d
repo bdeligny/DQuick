@@ -170,8 +170,8 @@ unittest
 	dmlEngine.create();
 	dmlEngine.addObjectBindingType!(Item, "Item");
 
-	// Test basic item
-	/+string lua1 = q"(
+	/+// Test basic item
+	string lua1 = q"(
 		Item {
 			id = "item1"
 		}
@@ -413,7 +413,7 @@ unittest
 		dmlEngine.execute("testObject3.nativeSubItem = testObject5.nativeSubItem", "");
 		dmlEngine.execute("subItemGlobal8 = testObject3.nativeSubItem", "");
 		assert(dmlEngine.getLuaGlobal!SubItem("subItemGlobal8") is testObject5.nativeSubItem);
-	}
+	}+/
 
 	// Component
 	{
@@ -437,9 +437,9 @@ unittest
 		assert(item18 !is null);
 		assert(item17.nativeProperty == 300);
 		assert(item18.nativeProperty == 400);
-	}+/
+	}
 
-	/+// Explicit this
+	// Explicit this
 	{
 		string lua = q"(
 			Item {
@@ -447,11 +447,15 @@ unittest
 				virtualProperty = 10,
 				nativeProperty = function()
 					return this.virtualProperty
+				end,
+				onNativePropertyChanged = function()
+					this.nativeTotalProperty = 20
 				end
 			}
 		)";
 		dmlEngine.execute(lua, "");
 		assert(dmlEngine.getLuaGlobal!Item("item19").nativeProperty == 10);
+		assert(dmlEngine.getLuaGlobal!Item("item19").nativeTotalProperty == 20);
 	}
 
 	// Implicit this
@@ -462,34 +466,21 @@ unittest
 				virtualProperty = 10,
 				nativeProperty = function()
 					return virtualProperty
+				end,
+				onNativePropertyChanged = function()
+					nativeTotalProperty = 20
 				end
 			}
 		)";
 		dmlEngine.execute(lua, "");
 		assert(dmlEngine.getLuaGlobal!Item("item20").nativeProperty == 10);
-	}+/
-
-	// Parent
-	{
-		string lua = q"(
-			Item {
-				id = "item22",
-				virtualProperty = 100,
-				Item {
-					id = "item21",
-					nativeProperty = function()
-						return this.parent.virtualProperty
-					end
-				}
-			}
-		)";
-		dmlEngine.execute(lua, "");
-		assert(dmlEngine.getLuaGlobal!Item("item21").nativeProperty == 100);
+		assert(dmlEngine.getLuaGlobal!Item("item20").nativeTotalProperty == 20);
 	}
 	}
 	catch (Throwable e)
 	{
 		writeln(e.toString());
+		int toto = 10;
 	}
 }
 
@@ -676,15 +667,9 @@ public:
 
 		if (lua_pcall(luaState(), 0, LUA_MULTRET, 0) != LUA_OK)
 		{
-			const char* error = lua_tostring(luaState(), -1);
-			writeln("DMLEngineCore.execute: error: " ~ to!(string)(error));
+			string error = to!(string)(lua_tostring(luaState(), -1));
 			lua_pop(luaState(), 1);
-			assert(false);
-
-			version (release)
-			{
-				return;
-			}
+			throw new Exception(format("lua_pcall error: %s", error));
 		}
 
 		if (initializationPhase == 1)
@@ -745,7 +730,7 @@ public:
 	T	getLuaGlobal(T)(string name)
 	{
 		lua_getglobal(mLuaState, name.toStringz());
-		if (lua_isnone(mLuaState, -1) || lua_isnil(mLuaState, -1))
+		if (lua_isnone(mLuaState, -1))
 			throw new Exception(format("global \"%s\" is nil\n", name));
 		T	value = dquick.script.utils.valueFromLua!T(mLuaState, -1);
 		lua_pop(mLuaState, 1);
@@ -759,10 +744,11 @@ public:
 	}
 
 	static immutable bool showDebug = 0;
+	int[]		mEnvStack;
 protected:
 	dquick.script.iItemBinding.IItemBinding[void*]	mVoidToDeclarativeItems;
 	dquick.script.iItemBinding.IItemBinding			mLastItemBindingCreated;
-	int[]		mEnvStack;
+	
 	lua_State*	mLuaState;
 	IWindow		mWindow;
 	package dquick.script.propertyBinding.PropertyBinding[]		currentlyExecutedBindingStack;
@@ -917,7 +903,15 @@ extern(C)
 							{
 								// Call metamethod to instanciate type
 								lua_pushstring(L, "__call");
-								lua_pushcfunction(L, cast(lua_CFunction)&methodLuaBind!(member, typeof(itemBinding)));
+								lua_pushcfunction(L, cast(lua_CFunction)&methodCallLuaBind!(member, typeof(itemBinding)));
+								lua_settable(L, -3);
+								// Index metamethod to warn user that it's a method
+								lua_pushstring(L, "__index");
+								lua_pushcfunction(L, cast(lua_CFunction)&methodIndexLuaBind!(member, typeof(itemBinding)));
+								lua_settable(L, -3);
+								// newIndex metamethod to warn user that it's a method
+								lua_pushstring(L, "__newindex");
+								lua_pushcfunction(L, cast(lua_CFunction)&methodNewIndexLuaBind!(member, typeof(itemBinding)));
 								lua_settable(L, -3);
 							}
 							lua_setmetatable(L, -2);
@@ -1028,7 +1022,7 @@ extern(C)
 	}
 
 	// Handle method binding
-	private int	methodLuaBind(string methodName, T)(lua_State* L)
+	private int	methodCallLuaBind(string methodName, T)(lua_State* L)
 	{
 		try
 		{
@@ -1057,9 +1051,21 @@ extern(C)
 		}
 		catch (Throwable e)
 		{
-			writeln(e.toString());
+			luaL_error(L, e.msg.toStringz());
 			return 0;
 		}
+	}
+	// Index metamethod to warn user that it's a method
+	private int	methodIndexLuaBind(string methodName, T)(lua_State* L)
+	{
+		luaL_error(L, "methodIndexLuaBind: attempt to index a method");
+		return 0;
+	}
+	// newIndex metamethod to warn user that it's a method
+	private int	methodNewIndexLuaBind(string methodName, T)(lua_State* L)
+	{
+		luaL_error(L, "methodIndexLuaBind: attempt to assign a method");
+		return 0;
 	}
 
 	private int	globalIndexLuaBind(lua_State* L)

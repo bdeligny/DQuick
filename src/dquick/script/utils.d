@@ -145,7 +145,9 @@ T	valueFromLua(T)(lua_State* L, int index)
 		}
 	}
 	else
-		throw new Exception(format("Lua value at index %d is a \"%s\", a number, boolean or string was expected\n", index, getLuaTypeName(L, index)));
+	{
+		static assert(false);
+	}
 	return value;
 }
 
