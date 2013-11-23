@@ -1,7 +1,7 @@
 require "dml/button"
 
 function createImage(par, name, num)
-	if num < 100 then
+	if num < 40 then
 		return 	Image {
 			id = name,
 			source = "images/pngtest.png",
@@ -57,7 +57,7 @@ GraphicItem {
 				return image.height / 0.9
 			end,
 
-	--		createImage("image2", "image3", 0),
+			createImage("image2", "image3", 0),
 		
 			MouseArea {
 				id = "mArea2",

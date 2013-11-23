@@ -20,6 +20,7 @@ import std.algorithm;
 import std.traits;
 import std.typetuple;
 import std.c.string;
+import std.path;
 
 version(unittest)
 {
@@ -170,7 +171,7 @@ unittest
 	dmlEngine.create();
 	dmlEngine.addObjectBindingType!(Item, "Item");
 
-	/+// Test basic item
+	// Test basic item
 	string lua1 = q"(
 		Item {
 			id = "item1"
@@ -178,8 +179,8 @@ unittest
 	)";
 	dmlEngine.execute(lua1, "");
 	assert(dmlEngine.getLuaGlobal!Item("item1") !is null);
-	assert(dmlEngine.rootItemBinding() !is null);
-	assert(dmlEngine.rootItemBinding().id == "item1");
+	assert(dmlEngine.rootItemBinding!DeclarativeItem() !is null);
+	assert(dmlEngine.rootItemBinding!DeclarativeItem().id == "item1");
 
 	// Test native property
 	string lua2 = q"(
@@ -413,18 +414,58 @@ unittest
 		dmlEngine.execute("testObject3.nativeSubItem = testObject5.nativeSubItem", "");
 		dmlEngine.execute("subItemGlobal8 = testObject3.nativeSubItem", "");
 		assert(dmlEngine.getLuaGlobal!SubItem("subItemGlobal8") is testObject5.nativeSubItem);
-	}+/
+	}
 
 	// Component
 	{
+		string	subComponent = q"(
+			Item {
+				id = "subComponentRoot",
+				virtualProperty = 600,
+				nativeProperty = function()
+					return item1800.nativeProperty
+				end,
+				Item {
+					id = "item1800",
+					virtualProperty = function()
+						return subComponentRoot.virtualProperty
+					end,
+					nativeProperty = function()
+						return item1800.virtualProperty
+					end,
+				},
+			}
+		)";
+		std.file.write("SubComponent.lua", subComponent);
+		string	component = q"(
+			ImportComponent("SubComponent.lua")
+			Item {
+				id = "componentRoot",
+				virtualProperty = 200,
+				nativeProperty = function()
+					return item180.nativeProperty
+				end,
+				SubComponent {
+					id = "item180",
+					virtualProperty = function()
+						return componentRoot.virtualProperty
+					end,
+				},
+			}
+		)";
+		std.file.write("Component.lua", component);
 		string lua = q"(
+			ImportComponent("Component.lua")
 			Item {
 				id = "item16",
-				Button {
+				Component {
 					id = "item17",
 					virtualProperty = 300,
+					nativeTotalProperty = function()
+						return item18.virtualProperty
+					end,
 				},
-				Button {
+				Component {
 					id = "item18",
 					virtualProperty = 400,
 				},
@@ -436,6 +477,7 @@ unittest
 		assert(item17 !is null);
 		assert(item18 !is null);
 		assert(item17.nativeProperty == 300);
+		assert(item17.nativeTotalProperty == 400);
 		assert(item18.nativeProperty == 400);
 	}
 
@@ -484,22 +526,6 @@ unittest
 	}
 }
 
-string	button = q"(
-	Item {
-		id = "buttonRoot",
-		virtualProperty = 200,
-		nativeProperty = function()
-			return button2.virtualProperty
-		end,
-		Item {
-			id = "button2",
-			virtualProperty = function()
-				return buttonRoot.virtualProperty
-			end,
-		}
-	}
-)";
-
 class DMLEngineCore
 {
 public:
@@ -530,18 +556,13 @@ public:
 		lua_pushlightuserdata(luaState(), cast(void*)this);
 		lua_settable(luaState(), LUA_REGISTRYINDEX);
 
+		// ImportComponent
+		lua_pushcfunction(mLuaState, cast(lua_CFunction)&importComponentLuaBind);
+		lua_setglobal(mLuaState, "ImportComponent");
 
 		lua_getglobal(luaState(), "_G");
-		// Create metatable
-		lua_newtable(luaState());
-		{
-			// Call metamethod to instanciate type
-			lua_pushstring(luaState(), "__index");
-			lua_pushcfunction(luaState(), cast(lua_CFunction)&globalIndexLuaBind);
-			lua_settable(luaState(), -3);
-		}
-		lua_setmetatable(luaState(), -2);
-		lua_setglobal(luaState(), "_G");
+		assert(lua_istable(luaState(), -1));
+		mEnvStack ~= luaL_ref(luaState(), LUA_REGISTRYINDEX);
 	}
 
 	void	destroy()
@@ -629,9 +650,17 @@ public:
 	{
 		assert(isCreated());
 
+		loadFile(filePath);
+		execute();
+	}
+
+	void	loadFile(string filePath)
+	{
+		assert(isCreated());
+
 		string	text;
 		text = cast(string)read(filePath);
-		execute(text, filePath);
+		load(text, filePath);
 	}
 
 	void	load(string text, string filePath)
@@ -682,8 +711,12 @@ public:
 			static if (showDebug)
 			{
 				writeln("DEPENDANCY TREE ==================================================================================================");
-				foreach (key, bindingRef; mItemsToItemBindings)
-					writefln("%s\n%s", key, shiftRight(bindingRef.iItemBinding.displayDependents(), "\t", 1));
+				foreach (key, binding; mVoidToDeclarativeItems)
+				{
+					auto declarativeItem = cast(DeclarativeItem)binding;
+					if (declarativeItem)
+						writefln("%s\n%s", declarativeItem.id, shiftRight(binding.displayDependents(), "\t", 1));
+				}
 				writeln("=======================================================================================================");
 			}
 		}
@@ -722,9 +755,9 @@ public:
 		return mLuaState;
 	}
 
-	DeclarativeItem	rootItemBinding()
+	T	rootItemBinding(T)()
 	{
-		return cast(DeclarativeItem)(mLastItemBindingCreated);
+		return cast(T)(mLastItemBindingCreated);
 	}
 
 	T	getLuaGlobal(T)(string name)
@@ -744,7 +777,13 @@ public:
 	}
 
 	static immutable bool showDebug = 0;
-	int[]		mEnvStack;
+
+	int		currentLuaEnv()
+	{
+		assert(mEnvStack.length > 0);
+		return mEnvStack[mEnvStack.length - 1];
+	}
+
 protected:
 	dquick.script.iItemBinding.IItemBinding[void*]	mVoidToDeclarativeItems;
 	dquick.script.iItemBinding.IItemBinding			mLastItemBindingCreated;
@@ -755,8 +794,10 @@ protected:
 	string		itemTypeIds;
 	package alias TypeTuple!(int, float, string, bool, Object)	propertyTypes;
 	package int	initializationPhase;
+	int[string]	mComponentLuaReferences;
 	static if (showDebug)
 		package int	lvl;
+	int[]		mEnvStack;
 }
 
 extern(C)
@@ -821,9 +862,18 @@ extern(C)
 			if (itemBinding.id != "")
 			{
 				// Get _ENV
-				lua_rawgeti(L, LUA_REGISTRYINDEX, dmlEngine.mEnvStack[dmlEngine.mEnvStack.length - 1]);
+				lua_rawgeti(L, LUA_REGISTRYINDEX, dmlEngine.currentLuaEnv);
 
 				lua_pushstring(L, itemBinding.id.toStringz());
+
+				{ // Check for id conflict
+					lua_pushvalue(L, -1);
+					lua_rawget(L, -3); // Raw get without calling index metamethod to not get parent components values
+					if (lua_isnil(L, -1) == false)
+						throw new Exception(format("An item with id \"%s\" already exist in that component", itemBinding.id));
+					lua_pop(L, 1);
+				}
+
 				lua_pushvalue(L, -3);
 
 				lua_settable(L, -3);
@@ -976,7 +1026,6 @@ extern(C)
 					{
 						found = true;
 						__traits(getMember, itemBinding, member).bindingFromLua(L, 1);
-						__traits(getMember, itemBinding, member).dirty = true;
 						if (dmlEngine.initializationPhase == false)					
 							__traits(getMember, itemBinding, member).executeBinding();
 						return 1;
@@ -988,7 +1037,6 @@ extern(C)
 			if (virtualProperty)
 			{
 				virtualProperty.bindingFromLua(L, 1);
-				virtualProperty.dirty = true;
 				virtualProperty.executeBinding();
 				return 1;
 			}
@@ -1068,38 +1116,42 @@ extern(C)
 		return 0;
 	}
 
-	private int	globalIndexLuaBind(lua_State* L)
+	private int	importComponentLuaBind(lua_State* L)
 	{
 		try
 		{
-			if (lua_gettop(L) != 2)
+			if (lua_gettop(L) != 1)
 				throw new Exception(format("too few param, got %d, expected at least 1\n", lua_gettop(L)));
-			if (!lua_istable(L, 1))
-				throw new Exception("param 1 is not a table");
-			if (!lua_isstring(L, 2))
+			if (!lua_isstring(L, 1))
 				throw new Exception("param 1 is not a string");
 
-			const(char)*	key = lua_tostring(L, 2);
+			string	path = to!(string)(lua_tostring(L, 1));
 			lua_pop(L, 1);
+
+			lua_pushstring(L, "__This");
+			lua_gettable(L, LUA_REGISTRYINDEX);
+			DMLEngineCore	dmlEngine = cast(DMLEngineCore)lua_touserdata(L, -1);
 			lua_pop(L, 1);
 
-			if (to!(string)(key) == "Button")
+			string	varName = baseName(stripExtension(path));
+			lua_getglobal(L, varName.toStringz());
+			if (lua_iscfunction(L, -1) == false)
 			{
-				lua_pushstring(L, "__This");
-				lua_gettable(L, LUA_REGISTRYINDEX);
-				DMLEngineCore	dmlEngine = cast(DMLEngineCore)lua_touserdata(L, -1);
-				lua_pop(L, 1);
-
-				lua_pushcfunction(L, cast(lua_CFunction)&createComponentLuaBind);
+				lua_pushstring(dmlEngine.luaState(), path.toStringz());
+				lua_pushcclosure(dmlEngine.luaState(), cast(lua_CFunction)&createComponentLuaBind, 1);
+				// Add type to a global
+				lua_setglobal(dmlEngine.luaState(), varName.toStringz());
 			}
-			else
+
+			/*string	varName = baseName(stripExtension(path));
+			lua_getglobal(L, varName.toStringz());
+			if (lua_iscfunction(L, -1) == false)
 			{
-				writefln("globalIndexLuaBind");
-
-				lua_rawgeti(L, LUA_REGISTRYINDEX, LUA_RIDX_GLOBALS);
-				lua_pushstring(L, key);
-				lua_rawget(L, -2);
-			}
+				dmlEngine.loadFile(path);
+				lua_pushcclosure(dmlEngine.luaState(), cast(lua_CFunction)&createComponentLuaBind, 1);
+				// Add type to a global
+				lua_setglobal(dmlEngine.luaState(), varName.toStringz());
+			}*/
 
 			return 1;
 		}
@@ -1129,11 +1181,11 @@ extern(C)
 				__env_chaining_index = function (_, n)
 				    local localRawGet = rawget(_, n)
 					if localRawGet == nil then
-						print("up "..n)
+						--print("up "..n)
 						--print(_ENV[n])
 						return _ENV[n]
 					else
-						print("local "..n)
+						--print("local "..n)
 						--print(localRawGet)
 						return localRawGet
 					end
@@ -1142,8 +1194,12 @@ extern(C)
 			dmlEngine.load(lua, "");
 			dmlEngine.execute();
 
-			// Load component code
-			dmlEngine.load(button, "");
+			// Get component code
+			string	path = to!(string)(lua_tostring(L, lua_upvalueindex(1)));
+			dmlEngine.loadFile(path);
+
+			/*lua_pushvalue(dmlEngine.luaState(), lua_upvalueindex(1));
+			assert(lua_isfunction(dmlEngine.luaState(), -1));*/
 
 			// Create new _ENV table
 			lua_newtable(dmlEngine.luaState());
@@ -1153,6 +1209,13 @@ extern(C)
 				// __index metamethod to chain lookup to the parent env
 				lua_pushstring(dmlEngine.luaState(), "__index");
 				lua_getglobal(dmlEngine.luaState(), "__env_chaining_index");
+
+				// Put component env
+				/*lua_rawgeti(dmlEngine.luaState(), LUA_REGISTRYINDEX, dmlEngine.currentLuaEnv);
+				const char*	envUpvalue = lua_setupvalue(dmlEngine.luaState(), -2, 1);
+				if (envUpvalue == null) // No access to env, env table is still on the stack so we need to pop it
+					lua_pop(dmlEngine.luaState(), 1);*/
+
 				lua_settable(dmlEngine.luaState(), -3);
 			}
 			lua_setmetatable(dmlEngine.luaState(), -2);
@@ -1162,23 +1225,34 @@ extern(C)
 			// Execute component code
 			dmlEngine.execute();
 
-			DeclarativeItem	declarativeItem = dmlEngine.rootItemBinding();
-			if (declarativeItem is null)
-				throw new Exception("\"Button\" component had no root item");
-			string	componentId = declarativeItem.id;
+			dquick.script.iItemBinding.IItemBinding	iItemBinding = dmlEngine.rootItemBinding!(dquick.script.iItemBinding.IItemBinding)();
+			if (iItemBinding is null)
+				throw new Exception("\"Button\" component has no root item");
 
-			dquick.script.iItemBinding.IItemBinding	iItemBinding = cast(dquick.script.iItemBinding.IItemBinding)declarativeItem;
-			assert(iItemBinding !is null);
+			string	componentId;
+			lua_pushstring(L, "id");
+			lua_gettable(L, -2);
+			if (lua_isnil(L, -1) == false)
+				componentId = to!(string)(lua_tostring(L, -1));
+			lua_pop(L, 1);
 
 			iItemBinding.valueFromLua(L);
 			iItemBinding.pushToLua(L);
 
 			// Set global from id
-			if (declarativeItem.id != "")
+			if (componentId != "")
 			{
 				// Get _ENV
-				lua_rawgeti(L, LUA_REGISTRYINDEX, dmlEngine.mEnvStack[dmlEngine.mEnvStack.length - 1]);
-				lua_pushstring(L, declarativeItem.id.toStringz());
+				lua_rawgeti(L, LUA_REGISTRYINDEX, dmlEngine.currentLuaEnv);
+				lua_pushstring(L, componentId.toStringz());
+
+				{ // Check for id conflict
+					lua_pushvalue(L, -1);
+					lua_rawget(L, -3); // Raw get without calling index metamethod to not get parent components values
+					if (lua_isnil(L, -1) == false)
+						throw new Exception(format("An item with id \"%s\" already exist in that component", componentId));
+					lua_pop(L, 1);
+				}
 
 				lua_pushvalue(L, -3);
 

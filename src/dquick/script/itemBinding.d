@@ -80,7 +80,8 @@ static string	ITEM_BINDING()
 					lua_getglobal(dmlEngine.luaState(), "__item_index");
 
 					// Put component env
-					lua_rawgeti(dmlEngine.luaState(), LUA_REGISTRYINDEX, dmlEngine.mEnvStack[dmlEngine.mEnvStack.length - 1]);
+					lua_rawgeti(dmlEngine.luaState(), LUA_REGISTRYINDEX, dmlEngine.currentLuaEnv);
+
 					const char*	envUpvalue = lua_setupvalue(dmlEngine.luaState(), -2, 1);
 					if (envUpvalue == null) // No access to env, env table is still on the stack so we need to pop it
 						lua_pop(dmlEngine.luaState(), 1);
@@ -94,7 +95,7 @@ static string	ITEM_BINDING()
 					lua_getglobal(dmlEngine.luaState(), "__item_newindex");
 
 					// Put component env
-					lua_rawgeti(dmlEngine.luaState(), LUA_REGISTRYINDEX, dmlEngine.mEnvStack[dmlEngine.mEnvStack.length - 1]);
+					lua_rawgeti(dmlEngine.luaState(), LUA_REGISTRYINDEX, dmlEngine.currentLuaEnv);
 					const char*	envUpvalue = lua_setupvalue(dmlEngine.luaState(), -2, 1);
 					if (envUpvalue == null) // No access to env, env table is still on the stack so we need to pop it
 						lua_pop(dmlEngine.luaState(), 1);

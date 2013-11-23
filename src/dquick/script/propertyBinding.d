@@ -10,6 +10,7 @@ import derelict.lua.lua;
 
 import dquick.script.dmlEngine;
 import dquick.script.iItemBinding;
+import dquick.item.declarativeItem;
 
 class PropertyBinding
 {
@@ -63,8 +64,8 @@ class PropertyBinding
 
 	void	executeBinding()
 	{
-		if (dirty == false)
-			return;
+		//if (dirty == false)
+		//	return;
 
 		if (luaReference != -1)
 		{
@@ -93,9 +94,11 @@ class PropertyBinding
 				return;
 			}
 
-			static if (dquick.script.dmlEngine.DMLEngine.showDebug)
+			static if (dquick.script.dmlEngineCore.DMLEngineCore.showDebug)
 			{
-				writefln("%s%s.%s.executeBinding {", replicate("|\t", itemBinding.dmlEngine.lvl++), itemBinding.declarativeItem.id, propertyName);
+				auto	declarativeItem = cast(DeclarativeItem)itemBinding;
+				if (declarativeItem)
+					writefln("%s%s.%s.executeBinding {", replicate("|\t", itemBinding.dmlEngine.lvl++), declarativeItem.id, propertyName);
 				scope(exit)
 				{
 					itemBinding.dmlEngine.lvl--;
@@ -142,7 +145,11 @@ class PropertyBinding
 			static if (dquick.script.dmlEngine.DMLEngine.showDebug)
 			{
 				foreach (dependency; dependencies)
-					writefln("%s dependent of %s.%s", replicate("|\t", itemBinding.dmlEngine.lvl), itemBinding.declarativeItem.id, dependency.propertyName);
+				{
+					auto	declarativeItem2 = cast(DeclarativeItem)itemBinding;
+					if (declarativeItem2)
+						writefln("%s dependent of %s.%s", replicate("|\t", itemBinding.dmlEngine.lvl), declarativeItem2.id, dependency.propertyName);
+				}
 			}
 			foreach (dependency; dependencies)
 				dependency.dependents ~= this;
@@ -167,7 +174,9 @@ class PropertyBinding
 		{
 			static if (dquick.script.dmlEngine.DMLEngine.showDebug)
 			{
-				writefln("%s%s.%s.onChanged {", replicate("|\t", itemBinding.dmlEngine.lvl++), itemBinding.declarativeItem.id, propertyName);
+				auto	declarativeItem2 = cast(DeclarativeItem)itemBinding;
+				if (declarativeItem2)
+					writefln("%s%s.%s.onChanged {", replicate("|\t", itemBinding.dmlEngine.lvl++), declarativeItem2.id, propertyName);
 				scope(exit)
 				{
 					itemBinding.dmlEngine.lvl--;
@@ -215,6 +224,7 @@ class PropertyBinding
 
 			luaReference = luaL_ref(L, LUA_REGISTRYINDEX);
 			lua_pushnil(L); // To compensate the value poped by luaL_ref
+			dirty = true;
 		}
 		else // Binding is juste a value
 		{
