@@ -542,9 +542,9 @@ public:
 	{
 		destroy();
 
-		mLuaState = luaL_newstate();
-		luaL_openlibs(mLuaState);
-		lua_atpanic(mLuaState, cast(lua_CFunction)&luaPanicFunction);
+		luaState = luaL_newstate();
+		luaL_openlibs(luaState);
+		lua_atpanic(luaState, cast(lua_CFunction)&luaPanicFunction);
 		initializationPhase = 0;
 		static if (showDebug)
 			lvl = 0;
@@ -552,32 +552,32 @@ public:
 		//GC.disable();
 		//scope(exit) GC.enable();
 
-		lua_pushstring(luaState(), "__This");
-		lua_pushlightuserdata(luaState(), cast(void*)this);
-		lua_settable(luaState(), LUA_REGISTRYINDEX);
+		lua_pushstring(luaState, "__This");
+		lua_pushlightuserdata(luaState, cast(void*)this);
+		lua_settable(luaState, LUA_REGISTRYINDEX);
 
 		// ImportComponent
-		lua_pushcfunction(mLuaState, cast(lua_CFunction)&importComponentLuaBind);
-		lua_setglobal(mLuaState, "ImportComponent");
+		lua_pushcfunction(luaState, cast(lua_CFunction)&importComponentLuaBind);
+		lua_setglobal(luaState, "ImportComponent");
 
-		lua_getglobal(luaState(), "_G");
-		assert(lua_istable(luaState(), -1));
-		mEnvStack ~= luaL_ref(luaState(), LUA_REGISTRYINDEX);
+		lua_getglobal(luaState, "_G");
+		assert(lua_istable(luaState, -1));
+		mEnvStack ~= luaL_ref(luaState, LUA_REGISTRYINDEX);
 	}
 
 	void	destroy()
 	{
-		if (mLuaState)
+		if (luaState)
 		{
-			lua_close(mLuaState);
-			mLuaState = null;
+			lua_close(luaState);
+			luaState = null;
 		}
 	}
 
 	void	addObjectBindingType(type, string luaName)()
 	{
 		// Create a lua table to host enums and factory
-		lua_newtable(mLuaState);
+		lua_newtable(luaState);
 		{
 			// Add enums
 			foreach (member; __traits(allMembers, type))
@@ -585,42 +585,42 @@ public:
 				static if (__traits(compiles, EnumMembers!(__traits(getMember, type, member))) && is(OriginalType!(__traits(getMember, type, member)) == int)) // If its an int enum
 				{
 					// Create enum table
-					lua_pushstring(mLuaState, member.toStringz());
-					lua_newtable(mLuaState);
+					lua_pushstring(luaState, member.toStringz());
+					lua_newtable(luaState);
 					{
 						auto enumMembers = EnumMembers!(__traits(getMember, type, member));
 						foreach (enumMember; enumMembers)
 						{
-							lua_pushstring(mLuaState, to!(string)(enumMember).toStringz());
-							lua_pushinteger(mLuaState, cast(int)enumMember);
+							lua_pushstring(luaState, to!(string)(enumMember).toStringz());
+							lua_pushinteger(luaState, cast(int)enumMember);
 
-							lua_settable(mLuaState, -3);
+							lua_settable(luaState, -3);
 						}
 					}
-					lua_settable(mLuaState, -3);
+					lua_settable(luaState, -3);
 				}
 			}
 
 			// Create metatable
-			lua_newtable(mLuaState);
+			lua_newtable(luaState);
 			{
 				// Call metamethod to instanciate type
-				lua_pushstring(mLuaState, "__call");
-				lua_pushcfunction(mLuaState, cast(lua_CFunction)&createLuaBind!(type));
-				lua_settable(mLuaState, -3);
+				lua_pushstring(luaState, "__call");
+				lua_pushcfunction(luaState, cast(lua_CFunction)&createLuaBind!(type));
+				lua_settable(luaState, -3);
 			}
-			lua_setmetatable(mLuaState, -2);
+			lua_setmetatable(luaState, -2);
 		}
 		// Add type to a global
-		lua_setglobal(mLuaState, luaName.toStringz());
+		lua_setglobal(luaState, luaName.toStringz());
 	}
 
 	void	addFunction(alias func, string luaName)()
 	{
 		static assert(isSomeFunction!func, "func must be a function");
 
-		lua_pushcfunction(mLuaState, cast(lua_CFunction)&functionLuaBind!func);
-		lua_setglobal(mLuaState, luaName.toStringz());
+		lua_pushcfunction(luaState, cast(lua_CFunction)&functionLuaBind!func);
+		lua_setglobal(luaState, luaName.toStringz());
 	}
 
 	void	addObjectBinding(T)(T object, string id = "")
@@ -643,7 +643,7 @@ public:
 
 	bool	isCreated()
 	{
-		return mLuaState != null;
+		return luaState != null;
 	}
 
 	void	executeFile(string filePath)
@@ -667,11 +667,11 @@ public:
 	{
 		assert(isCreated());
 
-		if (luaL_loadbuffer(luaState(), cast(const char*)text.ptr, text.length, filePath.toStringz()) != LUA_OK)
+		if (luaL_loadbuffer(luaState, cast(const char*)text.ptr, text.length, filePath.toStringz()) != LUA_OK)
 		{
-			const char* error = lua_tostring(luaState(), -1);
+			const char* error = lua_tostring(luaState, -1);
 			writeln("DMLEngineCore.execute: error: " ~ to!(string)(error));
-			lua_pop(luaState(), 1);
+			lua_pop(luaState, 1);
 			assert(false);
 
 			version (release)
@@ -688,16 +688,16 @@ public:
 		initializationPhase++;
 
 		// Save _ENV
-		lua_getupvalue(luaState(), -1, 1);
-		mEnvStack ~= luaL_ref(luaState(), LUA_REGISTRYINDEX);
+		lua_getupvalue(luaState, -1, 1);
+		mEnvStack ~= luaL_ref(luaState, LUA_REGISTRYINDEX);
 
 		static if (showDebug)
 			writeln("CREATE ==================================================================================================");
 
-		if (lua_pcall(luaState(), 0, LUA_MULTRET, 0) != LUA_OK)
+		if (lua_pcall(luaState, 0, LUA_MULTRET, 0) != LUA_OK)
 		{
-			string error = to!(string)(lua_tostring(luaState(), -1));
-			lua_pop(luaState(), 1);
+			string error = to!(string)(lua_tostring(luaState, -1));
+			lua_pop(luaState, 1);
 			throw new Exception(format("lua_pcall error: %s", error));
 		}
 
@@ -721,7 +721,7 @@ public:
 			}
 		}
 		initializationPhase--;
-		luaL_unref(luaState(), LUA_REGISTRYINDEX, mEnvStack[mEnvStack.length - 1]);
+		luaL_unref(luaState, LUA_REGISTRYINDEX, mEnvStack[mEnvStack.length - 1]);
 
 		mEnvStack.length--;
 	}
@@ -734,12 +734,12 @@ public:
 
 	void	execute(int functionRef)
 	{
-		lua_rawgeti(luaState(), LUA_REGISTRYINDEX, functionRef);
-		if (lua_pcall(luaState(), 0, LUA_MULTRET, 0) != LUA_OK)
+		lua_rawgeti(luaState, LUA_REGISTRYINDEX, functionRef);
+		if (lua_pcall(luaState, 0, LUA_MULTRET, 0) != LUA_OK)
 		{
-			const char* error = lua_tostring(luaState(), -1);
+			const char* error = lua_tostring(luaState, -1);
 			writeln("DMLEngineCore.execute: error: " ~ to!(string)(error));
-			lua_pop(luaState(), 1);
+			lua_pop(luaState, 1);
 			assert(false);
 
 			version (release)
@@ -750,11 +750,6 @@ public:
 		}
 	}
 
-	package lua_State*	luaState()
-	{
-		return mLuaState;
-	}
-
 	T	rootItemBinding(T)()
 	{
 		return cast(T)(mLastItemBindingCreated);
@@ -762,18 +757,19 @@ public:
 
 	T	getLuaGlobal(T)(string name)
 	{
-		lua_getglobal(mLuaState, name.toStringz());
-		if (lua_isnone(mLuaState, -1))
+		lua_getglobal(luaState, name.toStringz());
+		if (lua_isnone(luaState, -1))
 			throw new Exception(format("global \"%s\" is nil\n", name));
-		T	value = dquick.script.utils.valueFromLua!T(mLuaState, -1);
-		lua_pop(mLuaState, 1);
+		T	value;
+		dquick.script.utils.valueFromLua!T(luaState, -1, value);
+		lua_pop(luaState, 1);
 		return value;
 	}
 
 	void	setLuaGlobal(T)(string name, T value)
 	{
-		dquick.script.utils.valueToLua!T(mLuaState, value);
-		lua_setglobal(mLuaState, name.toStringz());
+		dquick.script.utils.valueToLua!T(luaState, value);
+		lua_setglobal(luaState, name.toStringz());
 	}
 
 	static immutable bool showDebug = 0;
@@ -788,7 +784,7 @@ protected:
 	dquick.script.iItemBinding.IItemBinding[void*]	mVoidToDeclarativeItems;
 	dquick.script.iItemBinding.IItemBinding			mLastItemBindingCreated;
 	
-	lua_State*	mLuaState;
+	package lua_State*	luaState;
 	IWindow		mWindow;
 	package dquick.script.propertyBinding.PropertyBinding[]		currentlyExecutedBindingStack;
 	string		itemTypeIds;
@@ -914,11 +910,15 @@ extern(C)
 			DMLEngineCore	dmlEngine = cast(DMLEngineCore)lua_touserdata(L, -1);
 			lua_pop(L, 1);
 
-			T	itemBinding = dquick.script.utils.valueFromLua!(T)(L, 1);
+			T	itemBinding;
+			dquick.script.utils.valueFromLua!(T)(L, 1, itemBinding);
 			assert(itemBinding !is null);
 			lua_remove(L, 1);
-			string	propertyId = dquick.script.utils.valueFromLua!(string)(L, 1);
-			lua_remove(L, 1);
+			const char*	propertyIdCString = lua_tostring(L, 1);
+			const(char)[]	propertyId = propertyIdCString[0 .. strlen(propertyIdCString)];
+			//string	propertyId;
+			//dquick.script.utils.valueFromLua!(string)(L, 1, propertyId);
+			//lua_remove(L, 1);
 
 			// Search for property binding on the itemBinding
 			foreach (member; __traits(allMembers, typeof(itemBinding)))
@@ -1011,7 +1011,8 @@ extern(C)
 			DMLEngineCore	dmlEngine = cast(DMLEngineCore)lua_touserdata(L, -1);
 			lua_pop(L, 1);
 
-			T	itemBinding = dquick.script.utils.valueFromLua!(T)(L, 1);
+			T	itemBinding;
+			dquick.script.utils.valueFromLua!(T)(L, 1, itemBinding);
 			assert(itemBinding !is null);
 			lua_remove(L, 1);
 			string	propertyId = to!(string)(lua_tostring(L, 1));
@@ -1089,7 +1090,8 @@ extern(C)
 			DMLEngineCore	dmlEngine = cast(DMLEngineCore)lua_touserdata(L, -1);
 			lua_pop(L, 1);
 
-			T	itemBinding = dquick.script.utils.valueFromLua!(T)(L, 1);
+			T	itemBinding;
+			dquick.script.utils.valueFromLua!(T)(L, 1, itemBinding);
 			lua_remove(L, 1);
 			assert(itemBinding !is null);
 
@@ -1137,10 +1139,10 @@ extern(C)
 			lua_getglobal(L, varName.toStringz());
 			if (lua_iscfunction(L, -1) == false)
 			{
-				lua_pushstring(dmlEngine.luaState(), path.toStringz());
-				lua_pushcclosure(dmlEngine.luaState(), cast(lua_CFunction)&createComponentLuaBind, 1);
+				lua_pushstring(dmlEngine.luaState, path.toStringz());
+				lua_pushcclosure(dmlEngine.luaState, cast(lua_CFunction)&createComponentLuaBind, 1);
 				// Add type to a global
-				lua_setglobal(dmlEngine.luaState(), varName.toStringz());
+				lua_setglobal(dmlEngine.luaState, varName.toStringz());
 			}
 
 			/*string	varName = baseName(stripExtension(path));
@@ -1148,9 +1150,9 @@ extern(C)
 			if (lua_iscfunction(L, -1) == false)
 			{
 				dmlEngine.loadFile(path);
-				lua_pushcclosure(dmlEngine.luaState(), cast(lua_CFunction)&createComponentLuaBind, 1);
+				lua_pushcclosure(dmlEngine.luaState, cast(lua_CFunction)&createComponentLuaBind, 1);
 				// Add type to a global
-				lua_setglobal(dmlEngine.luaState(), varName.toStringz());
+				lua_setglobal(dmlEngine.luaState, varName.toStringz());
 			}*/
 
 			return 1;
@@ -1198,30 +1200,30 @@ extern(C)
 			string	path = to!(string)(lua_tostring(L, lua_upvalueindex(1)));
 			dmlEngine.loadFile(path);
 
-			/*lua_pushvalue(dmlEngine.luaState(), lua_upvalueindex(1));
-			assert(lua_isfunction(dmlEngine.luaState(), -1));*/
+			/*lua_pushvalue(dmlEngine.luaState, lua_upvalueindex(1));
+			assert(lua_isfunction(dmlEngine.luaState, -1));*/
 
 			// Create new _ENV table
-			lua_newtable(dmlEngine.luaState());
+			lua_newtable(dmlEngine.luaState);
 			// Create new _ENV's metatable
-			lua_newtable(dmlEngine.luaState());
+			lua_newtable(dmlEngine.luaState);
 			{
 				// __index metamethod to chain lookup to the parent env
-				lua_pushstring(dmlEngine.luaState(), "__index");
-				lua_getglobal(dmlEngine.luaState(), "__env_chaining_index");
+				lua_pushstring(dmlEngine.luaState, "__index");
+				lua_getglobal(dmlEngine.luaState, "__env_chaining_index");
 
 				// Put component env
-				/*lua_rawgeti(dmlEngine.luaState(), LUA_REGISTRYINDEX, dmlEngine.currentLuaEnv);
-				const char*	envUpvalue = lua_setupvalue(dmlEngine.luaState(), -2, 1);
+				/*lua_rawgeti(dmlEngine.luaState, LUA_REGISTRYINDEX, dmlEngine.currentLuaEnv);
+				const char*	envUpvalue = lua_setupvalue(dmlEngine.luaState, -2, 1);
 				if (envUpvalue == null) // No access to env, env table is still on the stack so we need to pop it
-					lua_pop(dmlEngine.luaState(), 1);*/
+					lua_pop(dmlEngine.luaState, 1);*/
 
-				lua_settable(dmlEngine.luaState(), -3);
+				lua_settable(dmlEngine.luaState, -3);
 			}
-			lua_setmetatable(dmlEngine.luaState(), -2);
+			lua_setmetatable(dmlEngine.luaState, -2);
 
 			// Set table to _ENV upvalue
-			lua_setupvalue(dmlEngine.luaState(), -2, 1);
+			lua_setupvalue(dmlEngine.luaState, -2, 1);
 			// Execute component code
 			dmlEngine.execute();
 

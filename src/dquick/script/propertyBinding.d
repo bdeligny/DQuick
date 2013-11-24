@@ -18,7 +18,7 @@ class PropertyBinding
 	void	slotLuaReference(int luaRef)
 	{
 		if (_slotLuaReference != -1)
-			luaL_unref(itemBinding.dmlEngine.luaState(), LUA_REGISTRYINDEX, _slotLuaReference);
+			luaL_unref(itemBinding.dmlEngine.luaState, LUA_REGISTRYINDEX, _slotLuaReference);
 		_slotLuaReference = luaRef;
 	}
 	int		slotLuaReference()
@@ -30,7 +30,7 @@ class PropertyBinding
 	void	luaReference(int luaRef)
 	{
 		if (_luaReference != -1)
-			luaL_unref(itemBinding.dmlEngine.luaState(), LUA_REGISTRYINDEX, _luaReference);
+			luaL_unref(itemBinding.dmlEngine.luaState, LUA_REGISTRYINDEX, _luaReference);
 		_luaReference = luaRef;
 	}
 	int		luaReference()
@@ -39,7 +39,7 @@ class PropertyBinding
 	}
 
 	PropertyBinding[]	dependencies;
-	PropertyBinding[]	dependents;
+	PropertyBinding[PropertyBinding]	dependents;
 
 	byte	dirty;
 
@@ -80,7 +80,7 @@ class PropertyBinding
 					bindingLoopCallStack ~= ".";
 					bindingLoopCallStack ~= itemBinding.dmlEngine.currentlyExecutedBindingStack[index].propertyName;
 					bindingLoopCallStack ~= "\n";
-					if (itemBinding.dmlEngine.currentlyExecutedBindingStack[index] == this)
+					if (itemBinding.dmlEngine.currentlyExecutedBindingStack[index] is this)
 					{
 						loopCount++;
 						if (loopCount == 2)
@@ -88,9 +88,9 @@ class PropertyBinding
 					}
 				}
 				if (loopCount != 0)
-					writefln("DMLEngine.IItemBinding.PropertyBinding.executeBinding: property binding loop detected, callstack:\n%s...", bindingLoopCallStack);
+					throw new Exception(format("DMLEngine.IItemBinding.PropertyBinding.executeBinding: property binding loop detected, callstack:\n%s...", bindingLoopCallStack));
 				else
-					writeln("DMLEngine.IItemBinding.PropertyBinding.executeBinding: error, binding stack overflow (more than 50)");
+					throw new Exception(format("DMLEngine.IItemBinding.PropertyBinding.executeBinding: error, binding stack overflow (more than 50):\n%s...", bindingLoopCallStack));
 				return;
 			}
 
@@ -107,27 +107,18 @@ class PropertyBinding
 			}
 
 			foreach (dependency; dependencies)
-			{
-				for (int index = 0; index < cast(int)dependency.dependents.length; index++)
-				{
-					if (dependency.dependents[index] == this)
-					{
-						dependency.dependents = remove(dependency.dependents, index);
-						index--;
-					}
-				}
-			}
+				dependency.dependents[this] = null;
 
 			dependencies.clear();
 
 			itemBinding.dmlEngine.currentlyExecutedBindingStack ~= this;
 
 			//writefln("%sinitializationPhase = %d executeBinding %s", repeat("|\t", lvl), initializationPhase, item.id);
-			//writefln("top = %d", lua_gettop(luaState()));
+			//writefln("top = %d", lua_gettop(luaState));
 
-			int	top = lua_gettop(itemBinding.dmlEngine.luaState());
-			lua_rawgeti(itemBinding.dmlEngine.luaState(), LUA_REGISTRYINDEX, luaReference);
-			if (lua_pcall(itemBinding.dmlEngine.luaState(), 0, LUA_MULTRET, 0) != LUA_OK)
+			int	top = lua_gettop(itemBinding.dmlEngine.luaState);
+			lua_rawgeti(itemBinding.dmlEngine.luaState, LUA_REGISTRYINDEX, luaReference);
+			if (lua_pcall(itemBinding.dmlEngine.luaState, 0, LUA_MULTRET, 0) != LUA_OK)
 			{
 				version (release)
 				{
@@ -136,11 +127,11 @@ class PropertyBinding
 					return;
 				}
 
-				string error = to!(string)(lua_tostring(itemBinding.dmlEngine.luaState(), -1));
-				lua_pop(itemBinding.dmlEngine.luaState(), 1);
+				string error = to!(string)(lua_tostring(itemBinding.dmlEngine.luaState, -1));
+				lua_pop(itemBinding.dmlEngine.luaState, 1);
 				throw new Exception(format("lua_pcall error: %s", error));
 			}
-			scope(exit) lua_pop(itemBinding.dmlEngine.luaState(), lua_gettop(itemBinding.dmlEngine.luaState()) - top);
+			scope(exit) lua_pop(itemBinding.dmlEngine.luaState, lua_gettop(itemBinding.dmlEngine.luaState) - top);
 
 			static if (dquick.script.dmlEngine.DMLEngine.showDebug)
 			{
@@ -152,16 +143,16 @@ class PropertyBinding
 				}
 			}
 			foreach (dependency; dependencies)
-				dependency.dependents ~= this;
+				dependency.dependents[this] = this;
 
 			itemBinding.dmlEngine.currentlyExecutedBindingStack.length--;
 
-			if (lua_gettop(itemBinding.dmlEngine.luaState()) - top != 1)
+			if (lua_gettop(itemBinding.dmlEngine.luaState) - top != 1)
 			{
-				writefln("executeBinding:: too few or too many return values, got %d, expected 1\n", lua_gettop(itemBinding.dmlEngine.luaState()) - top);
+				writefln("executeBinding:: too few or too many return values, got %d, expected 1\n", lua_gettop(itemBinding.dmlEngine.luaState) - top);
 				return;
 			}
-			valueFromLua(itemBinding.dmlEngine.luaState(), -1, true);
+			valueFromLua(itemBinding.dmlEngine.luaState, -1, true);
 		}
 	}
 
@@ -187,8 +178,11 @@ class PropertyBinding
 			auto dependentsCopy = dependents.dup;
 			foreach (dependent; dependentsCopy)
 			{
-				dependent.dirty = true;
-				dependent.executeBinding();
+				if (dependent !is null)
+				{
+					dependent.dirty = true;
+					dependent.executeBinding();
+				}
 			}
 		}
 	}
@@ -207,7 +201,7 @@ class PropertyBinding
 
 		if (itemBinding.dmlEngine.currentlyExecutedBindingStack.length > 0)
 		{
-			assert(itemBinding.dmlEngine.currentlyExecutedBindingStack[itemBinding.dmlEngine.currentlyExecutedBindingStack.length - 1] != this);
+			assert(itemBinding.dmlEngine.currentlyExecutedBindingStack[itemBinding.dmlEngine.currentlyExecutedBindingStack.length - 1] !is this);
 			itemBinding.dmlEngine.currentlyExecutedBindingStack[itemBinding.dmlEngine.currentlyExecutedBindingStack.length - 1].dependencies ~= this;
 		}
 	}

@@ -3,8 +3,11 @@ ImportComponent("dml/Image2Component.lua")
 function createImages()
 	t = {}
 	t.id = "root"
+	t.toto = function()
+		return root.width
+	end
 	
-	local total = 50
+	local total = 10
 	
 	local sum = 0
 	local row = 0

@@ -64,48 +64,48 @@ static string	ITEM_BINDING()
 			dmlEngine.execute();
 
 			// Create new _ENV table
-			lua_newtable(dmlEngine.luaState());
+			lua_newtable(dmlEngine.luaState);
 
 			// this global
-			lua_pushstring(dmlEngine.luaState(), "this");
-			pushToLua(dmlEngine.luaState());
-			lua_settable(dmlEngine.luaState(), -3);
+			lua_pushstring(dmlEngine.luaState, "this");
+			pushToLua(dmlEngine.luaState);
+			lua_settable(dmlEngine.luaState, -3);
 
 			// Create new _ENV's metatable
-			lua_newtable(dmlEngine.luaState());
+			lua_newtable(dmlEngine.luaState);
 			{
 				{
 					// __index metamethod to chain lookup to the parent env
-					lua_pushstring(dmlEngine.luaState(), "__index");
-					lua_getglobal(dmlEngine.luaState(), "__item_index");
+					lua_pushstring(dmlEngine.luaState, "__index");
+					lua_getglobal(dmlEngine.luaState, "__item_index");
 
 					// Put component env
-					lua_rawgeti(dmlEngine.luaState(), LUA_REGISTRYINDEX, dmlEngine.currentLuaEnv);
+					lua_rawgeti(dmlEngine.luaState, LUA_REGISTRYINDEX, dmlEngine.currentLuaEnv);
 
-					const char*	envUpvalue = lua_setupvalue(dmlEngine.luaState(), -2, 1);
+					const char*	envUpvalue = lua_setupvalue(dmlEngine.luaState, -2, 1);
 					if (envUpvalue == null) // No access to env, env table is still on the stack so we need to pop it
-						lua_pop(dmlEngine.luaState(), 1);
+						lua_pop(dmlEngine.luaState, 1);
 
-					lua_settable(dmlEngine.luaState(), -3);
+					lua_settable(dmlEngine.luaState, -3);
 				}
 
 				{
 					// __newindex metamethod to chain assign to the parent env
-					lua_pushstring(dmlEngine.luaState(), "__newindex");
-					lua_getglobal(dmlEngine.luaState(), "__item_newindex");
+					lua_pushstring(dmlEngine.luaState, "__newindex");
+					lua_getglobal(dmlEngine.luaState, "__item_newindex");
 
 					// Put component env
-					lua_rawgeti(dmlEngine.luaState(), LUA_REGISTRYINDEX, dmlEngine.currentLuaEnv);
-					const char*	envUpvalue = lua_setupvalue(dmlEngine.luaState(), -2, 1);
+					lua_rawgeti(dmlEngine.luaState, LUA_REGISTRYINDEX, dmlEngine.currentLuaEnv);
+					const char*	envUpvalue = lua_setupvalue(dmlEngine.luaState, -2, 1);
 					if (envUpvalue == null) // No access to env, env table is still on the stack so we need to pop it
-						lua_pop(dmlEngine.luaState(), 1);
+						lua_pop(dmlEngine.luaState, 1);
 
-					lua_settable(dmlEngine.luaState(), -3);
+					lua_settable(dmlEngine.luaState, -3);
 				}
 			}
-			lua_setmetatable(dmlEngine.luaState(), -2);
+			lua_setmetatable(dmlEngine.luaState, -2);
 
-			mItemBindingLuaEnvReference = luaL_ref(dmlEngine.luaState(), LUA_REGISTRYINDEX);
+			mItemBindingLuaEnvReference = luaL_ref(dmlEngine.luaState, LUA_REGISTRYINDEX);
 		}
 
 		bool	mCreating;
