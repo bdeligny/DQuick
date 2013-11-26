@@ -76,7 +76,9 @@ class PropertyBinding
 				int	loopCount = 0;
 				for (int index = cast(int)(itemBinding.dmlEngine.currentlyExecutedBindingStack.length - 1);  index >= 0; index--)
 				{
-					//bindingLoopCallStack ~= itemBinding.dmlEngine.currentlyExecutedBindingStack[index].itemBinding.declarativeItem.id;
+					auto	declarativeItem = cast(DeclarativeItem)itemBinding.dmlEngine.currentlyExecutedBindingStack[index].itemBinding;
+					if (declarativeItem)
+						bindingLoopCallStack ~= declarativeItem.id;
 					bindingLoopCallStack ~= ".";
 					bindingLoopCallStack ~= itemBinding.dmlEngine.currentlyExecutedBindingStack[index].propertyName;
 					bindingLoopCallStack ~= "\n";
@@ -98,11 +100,14 @@ class PropertyBinding
 			{
 				auto	declarativeItem = cast(DeclarativeItem)itemBinding;
 				if (declarativeItem)
-					writefln("%s%s.%s.executeBinding {", replicate("|\t", itemBinding.dmlEngine.lvl++), declarativeItem.id, propertyName);
-				scope(exit)
 				{
-					itemBinding.dmlEngine.lvl--;
-					writefln("%s}", replicate("|\t", itemBinding.dmlEngine.lvl));
+					writefln("%s%s.%s.executeBinding {", replicate("|\t", itemBinding.dmlEngine.lvl++), declarativeItem.id, propertyName);
+					scope(exit)
+					{
+						assert(itemBinding.dmlEngine.lvl >= 1);
+						itemBinding.dmlEngine.lvl--;
+						writefln("%s}", replicate("|\t", itemBinding.dmlEngine.lvl));
+					}
 				}
 			}
 
@@ -167,11 +172,14 @@ class PropertyBinding
 			{
 				auto	declarativeItem2 = cast(DeclarativeItem)itemBinding;
 				if (declarativeItem2)
-					writefln("%s%s.%s.onChanged {", replicate("|\t", itemBinding.dmlEngine.lvl++), declarativeItem2.id, propertyName);
-				scope(exit)
 				{
-					itemBinding.dmlEngine.lvl--;
-					writefln("%s}", replicate("|\t", itemBinding.dmlEngine.lvl));
+					writefln("%s%s.%s.onChanged {", replicate("|\t", itemBinding.dmlEngine.lvl++), declarativeItem2.id, propertyName);
+					scope(exit)
+					{
+						assert(itemBinding.dmlEngine.lvl >= 1);
+						itemBinding.dmlEngine.lvl--;
+						writefln("%s}", replicate("|\t", itemBinding.dmlEngine.lvl));
+					}
 				}
 			}
 
