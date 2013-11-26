@@ -8,10 +8,10 @@ interface IItemBinding {
 	dquick.script.dmlEngineCore.DMLEngineCore	dmlEngine();
 	void										dmlEngine(dquick.script.dmlEngineCore.DMLEngineCore);
 	void	executeBindings();
-	static if (dquick.script.dmlEngine.DMLEngine.showDebug)
+	static if (dquick.script.dmlEngineCore.DMLEngineCore.showDebug)
 		string	displayDependents();
 	bool	creating();
 	void	valueFromLua(lua_State* L);
 	void	pushToLua(lua_State* L);
-	int		luaEnvReference();
+	int		itemBindingLuaEnvReference();
 }

@@ -16,7 +16,15 @@ import dquick.script.utils;
 static string	I_ITEM_BINDING()
 {
 	return ITEM_BINDING() ~ q"(
-		override void	dmlEngine(dquick.script.dmlEngineCore.DMLEngineCore dmlEngine) {mDMLEngine = dmlEngine;}
+		override void	dmlEngine(dquick.script.dmlEngineCore.DMLEngineCore dmlEngine)
+		{
+			assert(mDMLEngine is null || mDMLEngine is dmlEngine);
+			if (mDMLEngine != dmlEngine)
+			{
+				mDMLEngine = dmlEngine;
+				createItemBindingLuaEnv();
+			}
+		}
 	)";
 }
 
@@ -25,6 +33,80 @@ static string	ITEM_BINDING()
 	return q"(
 		dquick.script.dmlEngineCore.DMLEngineCore	mDMLEngine;
 		override dquick.script.dmlEngineCore.DMLEngineCore	dmlEngine() {return mDMLEngine;};
+
+		void	createItemBindingLuaEnv()
+		{
+			// Load env lookup function to handle this and parent
+			string	lua = q"(
+				__item_index = function (_, n)
+					if n == "this" then
+						return rawget(_, n)
+					else 
+						local itemMemberVal = rawget(_, "this")[n];
+						if itemMemberVal == nil then
+							return _ENV[n]
+						else
+							return itemMemberVal
+						end
+					end
+				end
+				__item_newindex = function (_, n, v)
+					assert(n ~= "this")
+					local this = rawget(_, "this")
+					if this[n] == nil then
+						_ENV[n] = v
+					else
+						this[n] = v
+					end
+				end
+			)";
+			dmlEngine.load(lua, "");
+			dmlEngine.execute();
+
+			// Create new _ENV table
+			lua_newtable(dmlEngine.luaState);
+
+			// this global
+			lua_pushstring(dmlEngine.luaState, "this");
+			pushToLua(dmlEngine.luaState);
+			lua_settable(dmlEngine.luaState, -3);
+
+			// Create new _ENV's metatable
+			lua_newtable(dmlEngine.luaState);
+			{
+				{
+					// __index metamethod to chain lookup to the parent env
+					lua_pushstring(dmlEngine.luaState, "__index");
+					lua_getglobal(dmlEngine.luaState, "__item_index");
+
+					// Put component env
+					lua_rawgeti(dmlEngine.luaState, LUA_REGISTRYINDEX, dmlEngine.currentLuaEnv);
+
+					const char*	envUpvalue = lua_setupvalue(dmlEngine.luaState, -2, 1);
+					if (envUpvalue == null) // No access to env, env table is still on the stack so we need to pop it
+						lua_pop(dmlEngine.luaState, 1);
+
+					lua_settable(dmlEngine.luaState, -3);
+				}
+
+				{
+					// __newindex metamethod to chain assign to the parent env
+					lua_pushstring(dmlEngine.luaState, "__newindex");
+					lua_getglobal(dmlEngine.luaState, "__item_newindex");
+
+					// Put component env
+					lua_rawgeti(dmlEngine.luaState, LUA_REGISTRYINDEX, dmlEngine.currentLuaEnv);
+					const char*	envUpvalue = lua_setupvalue(dmlEngine.luaState, -2, 1);
+					if (envUpvalue == null) // No access to env, env table is still on the stack so we need to pop it
+						lua_pop(dmlEngine.luaState, 1);
+
+					lua_settable(dmlEngine.luaState, -3);
+				}
+			}
+			lua_setmetatable(dmlEngine.luaState, -2);
+
+			mItemBindingLuaEnvReference = luaL_ref(dmlEngine.luaState, LUA_REGISTRYINDEX);
+		}
 
 		bool	mCreating;
 		bool	creating() {return mCreating;}
@@ -192,10 +274,10 @@ static string	ITEM_BINDING()
 			dquick.script.utils.valueToLua!(typeof(this))(L, this);
 		}
 
-		int	mLuaEnvReference;
-		override int	luaEnvReference()
+		int	mItemBindingLuaEnvReference;
+		override int	itemBindingLuaEnvReference()
 		{
-			return mLuaEnvReference;
+			return mItemBindingLuaEnvReference;
 		}
 	)";
 }
@@ -464,9 +546,11 @@ class ItemBinding(T) : ItemBindingBase!(T) // Proxy that auto bind T
 
 	override void			dmlEngine(dquick.script.dmlEngineCore.DMLEngineCore dmlEngine)
 	{
+		assert(mDMLEngine is null || mDMLEngine is dmlEngine);
 		if (mDMLEngine != dmlEngine)
 		{
 			mDMLEngine = dmlEngine;
+			createItemBindingLuaEnv();
 			dmlEngine2.registerItem!T(item, this);
 		}
 	}

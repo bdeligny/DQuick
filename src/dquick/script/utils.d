@@ -53,10 +53,8 @@ string	getPropertyNameFromPropertyDeclaration(string declaration)
 
 string	getPropertyNameFromSignalName(string signalName)
 {
-	auto reg = ctRegex!("^on(.+)Changed$");
-	auto	m = match(signalName, reg);
-	if (m)
-		return toLowerCamelCase(m.captures[1]);
+	if (startsWith(signalName, "on") && endsWith(signalName, "Changed"))
+		return toLowerCamelCase(signalName["on".length..signalName.length-"Changed".length]);
 	return "";
 }
 
@@ -90,11 +88,10 @@ string	getLuaTypeName(lua_State* L, int index)
 	}
 }
 
-T	valueFromLua(T)(lua_State* L, int index)
+void	valueFromLua(T)(lua_State* L, int index, ref T value)
 {
 	assert(isPointer!T == false);
 
-	T	value;
 	static if (is(T == Variant))
 	{
 		if (lua_isboolean(L, index))
@@ -148,7 +145,6 @@ T	valueFromLua(T)(lua_State* L, int index)
 	{
 		static assert(false);
 	}
-	return value;
 }
 
 void	valueToLua(T)(lua_State* L, T value)
@@ -218,7 +214,7 @@ void	luaCallD(alias func)(lua_State* L, int firstParamIndex)
 	alias ParameterTypeTuple!func MyParameterTypeTuple;
 	MyParameterTypeTuple	parameterTuple;
 	foreach (index, paramType; MyParameterTypeTuple)
-		parameterTuple[index] = dquick.script.utils.valueFromLua!paramType(L, firstParamIndex + index);
+		dquick.script.utils.valueFromLua!paramType(L, firstParamIndex + index, parameterTuple[index]);
 	lua_pop(L, parameterTuple.length);
 
 	// Call D function
@@ -245,7 +241,7 @@ void	luaCallThisD(string funcName, T)(T thisRef, lua_State* L, int firstParamInd
 	alias ParameterTypeTuple!(__traits(getMember, T, funcName)) MyParameterTypeTuple;
 	MyParameterTypeTuple	parameterTuple;
 	foreach (index, paramType; MyParameterTypeTuple)
-		parameterTuple[index] = dquick.script.utils.valueFromLua!paramType(L, firstParamIndex + index);
+		dquick.script.utils.valueFromLua!paramType(L, firstParamIndex + index, parameterTuple[index]);
 	lua_pop(L, parameterTuple.length);
 
 	// Call D function
