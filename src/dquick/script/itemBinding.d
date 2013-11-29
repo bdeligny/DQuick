@@ -292,8 +292,19 @@ static bool		isProperty(T, string member)()
 			{
 				static if (!is(ReturnType!(overload) == void) && TypeTuple!(ParameterTypeTuple!overload).length == 0) // Has a getter
 				{
-					static if (__traits(hasMember, T, getSignalNameFromPropertyName(member))) // Has a signal
-						return true;
+					foreach (overload2; __traits(getOverloads, T, member)) 
+					{
+						static if (isCallable!(overload2))
+						{
+							static if (is(ReturnType!(overload2) == void) && TypeTuple!(ParameterTypeTuple!overload2).length == 1 && is(ParameterTypeTuple!(overload2)[0] == ReturnType!(overload))) // Has a setter
+							{
+								return true;
+							}
+						}
+					}
+
+
+					return true;
 				}
 			}
 		}
@@ -319,6 +330,7 @@ static string	genProperties(T, propertyTypes...)()
 						{
 							static if (__traits(hasMember, T, getSignalNameFromPropertyName(member))) // Has a signal
 							{
+								pragma(msg, "property ", member);
 								static if (is(ReturnType!(overload) : dquick.item.declarativeItem.DeclarativeItem))
 								{
 									result ~= format("	void															__%s(%s value) {
@@ -390,7 +402,10 @@ static string	genProperties(T, propertyTypes...)()
 		static if (isProperty!(T, member) == false)
 		{
 			static if (__traits(compiles, generateMethodBinding!(T, member))) // Method
+			{
+				pragma(msg, "method ", member);
 				result ~= generateMethodBinding!(T, member);
+			}
 		}
 		static if (__traits(compiles, EnumMembers!(__traits(getMember, T, member))) && is(OriginalType!(__traits(getMember, T, member)) == int)) // If its an int enum
 		{

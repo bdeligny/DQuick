@@ -14,4 +14,7 @@ interface IItemBinding {
 	void	valueFromLua(lua_State* L);
 	void	pushToLua(lua_State* L);
 	int		itemBindingLuaEnvReference();
+
+	string	id();
+	void	id(string value);
 }

@@ -76,9 +76,7 @@ class PropertyBinding
 				int	loopCount = 0;
 				for (int index = cast(int)(itemBinding.dmlEngine.currentlyExecutedBindingStack.length - 1);  index >= 0; index--)
 				{
-					auto	declarativeItem = cast(DeclarativeItem)itemBinding.dmlEngine.currentlyExecutedBindingStack[index].itemBinding;
-					if (declarativeItem)
-						bindingLoopCallStack ~= declarativeItem.id;
+					bindingLoopCallStack ~= itemBinding.id;
 					bindingLoopCallStack ~= ".";
 					bindingLoopCallStack ~= itemBinding.dmlEngine.currentlyExecutedBindingStack[index].propertyName;
 					bindingLoopCallStack ~= "\n";
@@ -98,16 +96,12 @@ class PropertyBinding
 
 			static if (dquick.script.dmlEngineCore.DMLEngineCore.showDebug)
 			{
-				auto	declarativeItem = cast(DeclarativeItem)itemBinding;
-				if (declarativeItem)
+				writefln("%s%s.%s.executeBinding {", replicate("|\t", itemBinding.dmlEngine.lvl++), itemBinding.id, propertyName);
+				scope(exit)
 				{
-					writefln("%s%s.%s.executeBinding {", replicate("|\t", itemBinding.dmlEngine.lvl++), declarativeItem.id, propertyName);
-					scope(exit)
-					{
-						assert(itemBinding.dmlEngine.lvl >= 1);
-						itemBinding.dmlEngine.lvl--;
-						writefln("%s}", replicate("|\t", itemBinding.dmlEngine.lvl));
-					}
+					assert(itemBinding.dmlEngine.lvl >= 1);
+					itemBinding.dmlEngine.lvl--;
+					writefln("%s}", replicate("|\t", itemBinding.dmlEngine.lvl));
 				}
 			}
 
@@ -142,9 +136,7 @@ class PropertyBinding
 			{
 				foreach (dependency; dependencies)
 				{
-					auto	declarativeItem2 = cast(DeclarativeItem)itemBinding;
-					if (declarativeItem2)
-						writefln("%s dependent of %s.%s", replicate("|\t", itemBinding.dmlEngine.lvl), declarativeItem2.id, dependency.propertyName);
+					writefln("%s dependent of %s.%s", replicate("|\t", itemBinding.dmlEngine.lvl), itemBinding.id, dependency.propertyName);
 				}
 			}
 			foreach (dependency; dependencies)
@@ -170,16 +162,12 @@ class PropertyBinding
 		{
 			static if (dquick.script.dmlEngine.DMLEngine.showDebug)
 			{
-				auto	declarativeItem2 = cast(DeclarativeItem)itemBinding;
-				if (declarativeItem2)
+				writefln("%s%s.%s.onChanged {", replicate("|\t", itemBinding.dmlEngine.lvl++), itemBinding.id, propertyName);
+				scope(exit)
 				{
-					writefln("%s%s.%s.onChanged {", replicate("|\t", itemBinding.dmlEngine.lvl++), declarativeItem2.id, propertyName);
-					scope(exit)
-					{
-						assert(itemBinding.dmlEngine.lvl >= 1);
-						itemBinding.dmlEngine.lvl--;
-						writefln("%s}", replicate("|\t", itemBinding.dmlEngine.lvl));
-					}
+					assert(itemBinding.dmlEngine.lvl >= 1);
+					itemBinding.dmlEngine.lvl--;
+					writefln("%s}", replicate("|\t", itemBinding.dmlEngine.lvl));
 				}
 			}
 
