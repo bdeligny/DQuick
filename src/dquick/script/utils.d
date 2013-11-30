@@ -109,7 +109,7 @@ void	valueFromLua(T)(lua_State* L, int index, ref T value)
 			throw new Exception(format("Lua value at index %d is a \"%s\", a boolean was expected\n", index, getLuaTypeName(L, index)));
 		value = cast(bool)lua_toboolean(L, index);
 	}
-	else static if (is(T == int) || is(T == enum))
+	else static if (is(T == int) || is(T == uint) || is(T == enum))
 	{
 		if (!lua_isnumber(L, index))
 			throw new Exception(format("Lua value at index %d is a \"%s\", a number was expected\n", index, getLuaTypeName(L, index)));
@@ -142,9 +142,7 @@ void	valueFromLua(T)(lua_State* L, int index, ref T value)
 		}
 	}
 	else
-	{
 		static assert(false);
-	}
 }
 
 void	valueToLua(T)(lua_State* L, T value)
@@ -164,7 +162,7 @@ void	valueToLua(T)(lua_State* L, T value)
 		else
 			throw new Exception(format("Variant has type \"%s\", an int, double, bool or string was expected\n", value.type));
 	}
-	else static if (is(T == int) || is(T == enum))
+	else static if (is(T == int) || is(T == uint) || is(T == enum))
 		lua_pushinteger(L, value);
 	else static if (is(T == float))
 		lua_pushnumber(L, value);
@@ -261,17 +259,47 @@ void	luaCallThisD(string funcName, T)(T thisRef, lua_State* L, int firstParamInd
 
 unittest
 {
-	assert(getSignalNameFromPropertyName("mouseX") == "onMouseXChanged");
-	assert(getSignalNameFromPropertyName("X") == "onXChanged");
-	assert(getSignalNameFromPropertyName("x") == "onXChanged");
+	static assert(getSignalNameFromPropertyName("mouseX") == "onMouseXChanged");
+	static assert(getSignalNameFromPropertyName("X") == "onXChanged");
+	static assert(getSignalNameFromPropertyName("x") == "onXChanged");
 
-	assert(getPropertyNameFromSignalName("onMouseXChanged") == "mouseX");
-	assert(getPropertyNameFromSignalName("onXChanged") == "x");
+	static assert(getPropertyNameFromSignalName("onMouseXChanged") == "mouseX");
+	static assert(getPropertyNameFromSignalName("onXChanged") == "x");
 
-	assert(getPropertyNameFromPropertyDeclaration("mouseXProperty") == "mouseX");
-	assert(getPropertyNameFromPropertyDeclaration("XProperty") == "X");
-	assert(getPropertyNameFromPropertyDeclaration("xProperty") == "x");
-	assert(getPropertyNameFromPropertyDeclaration("xProp") == "");
+	static assert(getPropertyNameFromPropertyDeclaration("mouseXProperty") == "mouseX");
+	static assert(getPropertyNameFromPropertyDeclaration("XProperty") == "X");
+	static assert(getPropertyNameFromPropertyDeclaration("xProperty") == "x");
+	static assert(getPropertyNameFromPropertyDeclaration("xProp") == "");
+}
+
+template PropertyType(T, string member) // Return the type of the property member from T class
+{
+	alias PropertyTypeImpl!(__traits(getOverloads, T, member))	PropertyType;
+}
+
+template PropertyTypeImpl(overloads...) // Transform types in ItemBindingBases
+{
+	static if (overloads.length == 0)
+		alias void	PropertyTypeImpl;
+	else
+	{
+		static if (!is(ReturnType!(overloads[0]) == void) && TypeTuple!(ParameterTypeTuple!(overloads[0])).length == 0)
+			alias ReturnType!(overloads[0]) PropertyTypeImpl;
+		else
+			alias PropertyTypeImpl!(overloads[1 .. $]) PropertyTypeImpl;
+	}
+}
+
+unittest
+{
+	class Test {
+		int	_prop;
+		short	prop() {return cast(short)_prop;}
+		int	prop() {return _prop;}
+		void	prop(int value) { _prop = value; }
+	}
+
+	static assert(is(PropertyType!(Test, "prop") == short));
 }
 
 

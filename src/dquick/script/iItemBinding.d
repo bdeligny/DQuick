@@ -16,5 +16,4 @@ interface IItemBinding {
 	int		itemBindingLuaEnvReference();
 
 	string	id();
-	void	id(string value);
 }

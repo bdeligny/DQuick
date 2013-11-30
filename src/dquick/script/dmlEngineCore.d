@@ -34,9 +34,14 @@ version(unittest)
 
 		this()
 		{
+			idProperty = new typeof(idProperty)(this, this);
 			nativePropertyProperty = new typeof(nativePropertyProperty)(this, this);
 			onNativePropertyChanged.connect(&nativePropertyProperty.onChanged); // Signal
 		}
+
+		dquick.script.nativePropertyBinding.NativePropertyBinding!(string, SubItem, "id")	idProperty;
+		override string	id() { return DeclarativeItem.id(); }
+		override void	id(string value) { return DeclarativeItem.id(value); }
 
 		dquick.script.nativePropertyBinding.NativePropertyBinding!(int, SubItem, "nativeProperty")	nativePropertyProperty;
 		void	nativeProperty(int value)
@@ -60,6 +65,8 @@ version(unittest)
 
 		this()
 		{
+			idProperty = new typeof(idProperty)(this, this);
+
 			nativePropertyProperty = new typeof(nativePropertyProperty)(this, this);
 			onNativePropertyChanged.connect(&nativePropertyProperty.onChanged); // Signal
 
@@ -72,6 +79,10 @@ version(unittest)
 			nativeSubItemProperty = new typeof(nativeSubItemProperty)(this, this);
 			onNativeSubItemChanged.connect(&nativeSubItemProperty.onChanged); // Signal
 		}
+
+		dquick.script.nativePropertyBinding.NativePropertyBinding!(string, Item, "id")	idProperty;
+		override string	id() { return DeclarativeItem.id(); }
+		override void	id(string value) { return DeclarativeItem.id(value); }
 
 		dquick.script.nativePropertyBinding.NativePropertyBinding!(int, Item, "nativeProperty")	nativePropertyProperty;
 		void	nativeProperty(int value)
@@ -758,8 +769,6 @@ public:
 	T	getLuaGlobal(T)(string name)
 	{
 		lua_getglobal(luaState, name.toStringz());
-		if (lua_isnone(luaState, -1))
-			throw new Exception(format("global \"%s\" is nil\n", name));
 		T	value;
 		dquick.script.utils.valueFromLua!T(luaState, -1, value);
 		lua_pop(luaState, 1);
@@ -772,7 +781,7 @@ public:
 		lua_setglobal(luaState, name.toStringz());
 	}
 
-	static immutable bool showDebug = 1;
+	static immutable bool showDebug = 0;
 
 	int		currentLuaEnv()
 	{

@@ -15,7 +15,7 @@ import dquick.script.utils;
 
 static string	I_ITEM_BINDING()
 {
-	return ITEM_BINDING() ~ q"(
+	return BASE_ITEM_BINDING() ~ q"(
 		override void	dmlEngine(dquick.script.dmlEngineCore.DMLEngineCore dmlEngine)
 		{
 			assert(mDMLEngine is null || mDMLEngine is dmlEngine);
@@ -29,6 +29,17 @@ static string	I_ITEM_BINDING()
 }
 
 static string	ITEM_BINDING()
+{
+	return BASE_ITEM_BINDING() ~ q"(
+		override string	id()
+		{
+			return this.item.id;
+		}
+	)";
+}
+
+
+static string	BASE_ITEM_BINDING()
 {
 	return q"(
 		dquick.script.dmlEngineCore.DMLEngineCore	mDMLEngine;
@@ -161,80 +172,73 @@ static string	ITEM_BINDING()
 				{
 					string	key = to!(string)(lua_tostring(L, -2));
 
-					if (key == "id")
+					bool	found = false;
+					foreach (member; __traits(allMembers, typeof(this)))
 					{
-						this.id = to!(string)(lua_tostring(L, -1));
-					}
-					else
-					{
-						bool	found = false;
-						foreach (member; __traits(allMembers, typeof(this)))
+						static if (is(typeof(__traits(getMember, this, member)) : dquick.script.propertyBinding.PropertyBinding))
 						{
-							static if (is(typeof(__traits(getMember, this, member)) : dquick.script.propertyBinding.PropertyBinding))
+							if (key == getPropertyNameFromPropertyDeclaration(member))
 							{
-								if (key == getPropertyNameFromPropertyDeclaration(member))
-								{
-									found = true;
-									__traits(getMember, this, member).bindingFromLua(L, -1);
-									break;
-								}
-								else if (key == getSignalNameFromPropertyName(getPropertyNameFromPropertyDeclaration(member)))
-								{
-									found = true;
-
-									if (lua_isfunction(L, -1))
-									{
-										__traits(getMember, this, member).slotLuaReference = luaL_ref(L, LUA_REGISTRYINDEX);
-										lua_pushnil(L); // To compensate the value poped by luaL_ref
-									}
-									else
-										writefln("createLuaBind:: Attribute %s is not a function", key);
-									break;
-								}
+								found = true;
+								__traits(getMember, this, member).bindingFromLua(L, -1);
+								break;
 							}
-						}
-
-						if (found == false)
-						{
-							auto	propertyName = getPropertyNameFromSignalName(key);
-							if (propertyName != "")
+							else if (key == getSignalNameFromPropertyName(getPropertyNameFromPropertyDeclaration(member)))
 							{
 								found = true;
 
 								if (lua_isfunction(L, -1))
 								{
-									dquick.script.virtualPropertyBinding.VirtualPropertyBinding virtualProperty;
-									auto virtualPropertyPtr = (propertyName in this.virtualProperties);
-									if (!virtualPropertyPtr)
-									{
-										virtualProperty = new dquick.script.virtualPropertyBinding.VirtualPropertyBinding(this, propertyName);
-										this.virtualProperties[propertyName] = virtualProperty;
-									}
-									else
-									{
-										virtualProperty = *virtualPropertyPtr;
-									}
-									virtualProperty.slotLuaReference = luaL_ref(L, LUA_REGISTRYINDEX);
+									__traits(getMember, this, member).slotLuaReference = luaL_ref(L, LUA_REGISTRYINDEX);
 									lua_pushnil(L); // To compensate the value poped by luaL_ref
 								}
 								else
-									throw new Exception(format("createLuaBind:: Attribute %s is not a function", key));
+									writefln("createLuaBind:: Attribute %s is not a function", key);
+								break;
 							}
-							else
+						}
+					}
+
+					if (found == false)
+					{
+						auto	propertyName = getPropertyNameFromSignalName(key);
+						if (propertyName != "")
+						{
+							found = true;
+
+							if (lua_isfunction(L, -1))
 							{
 								dquick.script.virtualPropertyBinding.VirtualPropertyBinding virtualProperty;
-								auto virtualPropertyPtr = (key in this.virtualProperties);
+								auto virtualPropertyPtr = (propertyName in this.virtualProperties);
 								if (!virtualPropertyPtr)
 								{
-									virtualProperty = new dquick.script.virtualPropertyBinding.VirtualPropertyBinding(this, key);
-									this.virtualProperties[key] = virtualProperty;
+									virtualProperty = new dquick.script.virtualPropertyBinding.VirtualPropertyBinding(this, propertyName);
+									this.virtualProperties[propertyName] = virtualProperty;
 								}
 								else
 								{
 									virtualProperty = *virtualPropertyPtr;
 								}
-								virtualProperty.bindingFromLua(L, -1);
+								virtualProperty.slotLuaReference = luaL_ref(L, LUA_REGISTRYINDEX);
+								lua_pushnil(L); // To compensate the value poped by luaL_ref
 							}
+							else
+								throw new Exception(format("createLuaBind:: Attribute %s is not a function", key));
+						}
+						else
+						{
+							dquick.script.virtualPropertyBinding.VirtualPropertyBinding virtualProperty;
+							auto virtualPropertyPtr = (key in this.virtualProperties);
+							if (!virtualPropertyPtr)
+							{
+								virtualProperty = new dquick.script.virtualPropertyBinding.VirtualPropertyBinding(this, key);
+								this.virtualProperties[key] = virtualProperty;
+							}
+							else
+							{
+								virtualProperty = *virtualPropertyPtr;
+							}
+							virtualProperty.bindingFromLua(L, -1);
 						}
 					}
 				}
@@ -282,134 +286,100 @@ static string	ITEM_BINDING()
 	)";
 }
 
-static bool		isProperty(T, string member)()
-{
-	static if (__traits(compiles, __traits(getOverloads, T, member)))
-	{
-		foreach (overload; __traits(getOverloads, T, member)) 
-		{
-			static if (isCallable!(overload))
-			{
-				static if (!is(ReturnType!(overload) == void) && TypeTuple!(ParameterTypeTuple!overload).length == 0) // Has a getter
-				{
-					foreach (overload2; __traits(getOverloads, T, member)) 
-					{
-						static if (isCallable!(overload2))
-						{
-							static if (is(ReturnType!(overload2) == void) && TypeTuple!(ParameterTypeTuple!overload2).length == 1 && is(ParameterTypeTuple!(overload2)[0] == ReturnType!(overload))) // Has a setter
-							{
-								return true;
-							}
-						}
-					}
-
-
-					return true;
-				}
-			}
-		}
-	}
-	return false;
-}
-
 static string	genProperties(T, propertyTypes...)()
 {
 	string result = "";
 
 	foreach (member; __traits(allMembers, T))
 	{
-		static if (isProperty!(T, member)) // Property
+		static if (__traits(compiles, PropertyType!(T, member)))
 		{
-			static if (__traits(compiles, __traits(getOverloads, T, member)))
+			alias PropertyType!(T, member)	MyPropertyType;
+			static if (is(MyPropertyType == void) == false) // Property
 			{
-				foreach (overload; __traits(getOverloads, T, member)) 
+				static if (__traits(compiles, fullyQualifiedName2!(MyPropertyType))) // Hack because of a bug in fullyQualifiedName
 				{
-					static if (isCallable!(overload))
+					static if (member == "__ctor")
+						continue;
+
+					static if (is(MyPropertyType : dquick.item.declarativeItem.DeclarativeItem))
 					{
-						static if (!is(ReturnType!(overload) == void) && TypeTuple!(ParameterTypeTuple!overload).length == 0) // Has a getter
-						{
-							static if (__traits(hasMember, T, getSignalNameFromPropertyName(member))) // Has a signal
-							{
-								pragma(msg, "property ", member);
-								static if (is(ReturnType!(overload) : dquick.item.declarativeItem.DeclarativeItem))
-								{
-									result ~= format("	void															__%s(%s value) {
-															if (!(value is null && ____%sItemBinding is null) && !(____%sItemBinding && value is ____%sItemBinding.item))
-															{
-																if (____%sItemBinding)
-																	dmlEngine2.unregisterItem!(%s)(____%sItemBinding.item);
-																if (value)
-																	____%sItemBinding = dmlEngine2.registerItem!(%s)(value);
-																else
-																	____%sItemBinding = null;
-																__%s.emit(____%sItemBinding);
-															}																
-														}",
-													 getSignalNameFromPropertyName(member), fullyQualifiedName2!(ReturnType!(overload)),
-													 member, member, member,
-													 member,
-													 fullyQualifiedName2!(ReturnType!(overload)), member,
-													 member, fullyQualifiedName2!(ReturnType!(overload)),
-													 member,
-													 getSignalNameFromPropertyName(member~"ItemBinding"), member);	// Item Signal
+										
+						result ~= format("	void															__%s(%s value) {
+												if (!(value is null && ____%sItemBinding is null) && !(____%sItemBinding && value is ____%sItemBinding.item))
+												{
+													if (____%sItemBinding)
+														dmlEngine2.unregisterItem!(%s)(____%sItemBinding.item);
+													if (value)
+														____%sItemBinding = dmlEngine2.registerItem!(%s)(value);
+													else
+														____%sItemBinding = null;
+													__%s.emit(____%sItemBinding);
+												}																
+											}",
+											getSignalNameFromPropertyName(member), fullyQualifiedName2!(MyPropertyType),
+											member, member, member,
+											member,
+											fullyQualifiedName2!(MyPropertyType), member,
+											member, fullyQualifiedName2!(MyPropertyType),
+											member,
+											getSignalNameFromPropertyName(member~"ItemBinding"), member);	// Item Signal
 
-									result ~= format("	dquick.script.itemBinding.ItemBinding!(%s)					____%sItemBinding;\n", fullyQualifiedName2!(ReturnType!(overload)), member); // ItemBinding
-									result ~= format("	dquick.script.itemBinding.ItemBinding!(%s)					__%sItemBinding() {
-															return ____%sItemBinding;
-														}",
-													 fullyQualifiedName2!(ReturnType!(overload)), member,
-													 member); // ItemBinding Getter
-									result ~= format("	void															__%sItemBinding(dquick.script.itemBinding.ItemBinding!(%s) value) {
-															if (value != ____%sItemBinding)
-															{
-																if (____%sItemBinding !is null)
-																	dmlEngine2.unregisterItem!(%s)(____%sItemBinding.item);
-																 ____%sItemBinding = value;
-																if (____%sItemBinding !is null)
-																{
-																	dmlEngine2.registerItem!(%s)(____%sItemBinding.item);
-																	item.%s = value.item;
-																}
-																else
-																{
-																	item.%s = null;
-																}
-																__%s.emit(value);
-															}
-														}",
-													 member, fullyQualifiedName2!(ReturnType!(overload)),
-													 member,
-													 member,
-													 fullyQualifiedName2!(ReturnType!(overload)), member,
-													 member,
-													 member,
-													 fullyQualifiedName2!(ReturnType!(overload)), member,
-													 member,
-													 member,
-													 getSignalNameFromPropertyName(member~"ItemBinding"));	// ItemBinding Setter
-									result ~= format("	mixin Signal!(dquick.script.itemBinding.ItemBinding!(%s))	__%s;", fullyQualifiedName2!(ReturnType!(overload)), getSignalNameFromPropertyName(member~"ItemBinding"));
+						result ~= format("	dquick.script.itemBinding.ItemBinding!(%s)					____%sItemBinding;\n", fullyQualifiedName2!(MyPropertyType), member); // ItemBinding
+						result ~= format("	dquick.script.itemBinding.ItemBinding!(%s)					__%sItemBinding() {
+												return ____%sItemBinding;
+											}",
+											fullyQualifiedName2!(MyPropertyType), member,
+											member); // ItemBinding Getter
+						result ~= format("	void															__%sItemBinding(dquick.script.itemBinding.ItemBinding!(%s) value) {
+												if (value != ____%sItemBinding)
+												{
+													if (____%sItemBinding !is null)
+														dmlEngine2.unregisterItem!(%s)(____%sItemBinding.item);
+														____%sItemBinding = value;
+													if (____%sItemBinding !is null)
+													{
+														dmlEngine2.registerItem!(%s)(____%sItemBinding.item);
+														item.%s = value.item;
+													}
+													else
+													{
+														item.%s = null;
+													}
+													__%s.emit(value);
+												}
+											}",
+											member, fullyQualifiedName2!(MyPropertyType),
+											member,
+											member,
+											fullyQualifiedName2!(MyPropertyType), member,
+											member,
+											member,
+											fullyQualifiedName2!(MyPropertyType), member,
+											member,
+											member,
+											getSignalNameFromPropertyName(member~"ItemBinding"));	// ItemBinding Setter
+						//static if (__traits(hasMember, T, getSignalNameFromPropertyName(member))) // Has a signal
+							result ~= format("	mixin Signal!(dquick.script.itemBinding.ItemBinding!(%s))	__%s;", fullyQualifiedName2!(MyPropertyType), getSignalNameFromPropertyName(member~"ItemBinding"));
 
-									result ~= format("	dquick.script.nativePropertyBinding.NativePropertyBinding!(dquick.script.itemBinding.ItemBinding!(%s), dquick.script.itemBinding.ItemBinding!T, \"__%sItemBinding\")	%s;\n", fullyQualifiedName2!(ReturnType!(overload)), member, member~"Property");
-								}
-								else
-									result ~= format("	dquick.script.nativePropertyBinding.NativePropertyBinding!(%s, T, \"%s\")\t%s;\n", fullyQualifiedName2!(ReturnType!(overload)), member, member~"Property");
-							}
-						}
+						result ~= format("	dquick.script.nativePropertyBinding.NativePropertyBinding!(dquick.script.itemBinding.ItemBinding!(%s), dquick.script.itemBinding.ItemBinding!T, \"__%sItemBinding\")	%s;\n", fullyQualifiedName2!(MyPropertyType), member, member~"Property");
 					}
+					else
+						result ~= format("	dquick.script.nativePropertyBinding.NativePropertyBinding!(%s, T, \"%s\")\t%s;\n", fullyQualifiedName2!(MyPropertyType), member, member~"Property");
+
 				}
 			}
-		}
-		static if (isProperty!(T, member) == false)
-		{
-			static if (__traits(compiles, generateMethodBinding!(T, member))) // Method
+			static if (is(MyPropertyType == void) == true)
 			{
-				pragma(msg, "method ", member);
-				result ~= generateMethodBinding!(T, member);
+				static if (__traits(compiles, generateMethodBinding!(T, member))) // Method
+				{
+					result ~= generateMethodBinding!(T, member);
+				}
 			}
-		}
-		static if (__traits(compiles, EnumMembers!(__traits(getMember, T, member))) && is(OriginalType!(__traits(getMember, T, member)) == int)) // If its an int enum
-		{
-			result ~= format("alias %s	%s;", fullyQualifiedName2!(__traits(getMember, T, member)), member);
+			static if (__traits(compiles, EnumMembers!(__traits(getMember, T, member))) && is(OriginalType!(__traits(getMember, T, member)) == int)) // If its an int enum
+			{
+				result ~= format("alias %s	%s;", fullyQualifiedName2!(__traits(getMember, T, member)), member);
+			}
 		}
 	}
 
@@ -509,17 +479,19 @@ class ItemBinding(T) : ItemBindingBase!(T) // Proxy that auto bind T
 				static if (__traits(hasMember, this, "____"~propertyName~"ItemBinding")) // Instanciate subitem binding
 				{
 					__traits(getMember, this, member) = new typeof(__traits(getMember, this, member))(this, this);  // Instantiate property binding linked to __propertyName inside this
-					__traits(getMember, this, "__"~getSignalNameFromPropertyName(propertyName~"ItemBinding")).connect(&__traits(getMember, this, member).onChanged); // Signal
+					static if (__traits(hasMember, this.item, getSignalNameFromPropertyName(propertyName)))
+						__traits(getMember, this, "__"~getSignalNameFromPropertyName(propertyName~"ItemBinding")).connect(&__traits(getMember, this, member).onChanged); // Signal
 
-					__traits(getMember, this.item, getSignalNameFromPropertyName(propertyName)).connect(&__traits(getMember, this, "__"~getSignalNameFromPropertyName(propertyName))); // Signal
+					static if (__traits(hasMember, this.item, getSignalNameFromPropertyName(propertyName)))
+						__traits(getMember, this.item, getSignalNameFromPropertyName(propertyName)).connect(&__traits(getMember, this, "__"~getSignalNameFromPropertyName(propertyName))); // Signal
 					__traits(getMember, this, "__"~getSignalNameFromPropertyName(propertyName))(__traits(getMember, item, propertyName)); // Set initial value
 				}
 				else // Simple type
 				{
 					__traits(getMember, this, member) = new typeof(__traits(getMember, this, member))(this, item);  // Instantiate property binding linked to member inside item
-					__traits(getMember, this.item, getSignalNameFromPropertyName(propertyName)).connect(&__traits(getMember, this, member).onChanged); // Signal
+					static if (__traits(hasMember, this.item, getSignalNameFromPropertyName(propertyName)))
+						__traits(getMember, this.item, getSignalNameFromPropertyName(propertyName)).connect(&__traits(getMember, this, member).onChanged); // Signal
 				}
-
 			}
 		}
 	}
