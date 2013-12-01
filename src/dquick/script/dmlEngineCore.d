@@ -556,7 +556,7 @@ public:
 		luaState = luaL_newstate();
 		luaL_openlibs(luaState);
 		lua_atpanic(luaState, cast(lua_CFunction)&luaPanicFunction);
-		initializationPhase = 0;
+		mReentrencyLevel = 0;
 		static if (showDebug)
 			lvl = 0;
 
@@ -643,8 +643,12 @@ public:
 
 		if (object !is null)
 		{
-			object.dmlEngine = this;		
-			mVoidToDeclarativeItems[cast(void*)(object)] = object;
+			if (object.dmlEngine is null)
+			{
+				object.dmlEngine = this;
+				assert(find(mItems, object) == [], format("Object \"%s\" is already added", id));
+				mItems ~= object;
+			}
 			mLastItemBindingCreated = object;
 		}
 
@@ -696,7 +700,8 @@ public:
 	{
 		assert(isCreated());
 
-		initializationPhase++;
+		mReentrencyLevel++;
+		size_t	itemCount = mItems.length;
 
 		// Save _ENV
 		lua_getupvalue(luaState, -1, 1);
@@ -712,29 +717,25 @@ public:
 			throw new Exception(format("lua_pcall error: %s", error));
 		}
 
-		if (initializationPhase == 1)
+		luaL_unref(luaState, LUA_REGISTRYINDEX, mEnvStack[mEnvStack.length - 1]);
+		mEnvStack.length--;
+
+		if (mReentrencyLevel == 1) // Call bindings only after the last execute to avoid errors in bindings due to partial creation
 		{
 			static if (showDebug)
 				writeln("INIT ==================================================================================================");
-			foreach (key, binding; mVoidToDeclarativeItems)
-				binding.executeBindings();
+			for (size_t index = itemCount; index < mItems.length; index++)
+				mItems[index].executeBindings();
 
 			static if (showDebug)
 			{
 				writeln("DEPENDANCY TREE ==================================================================================================");
-				foreach (key, binding; mVoidToDeclarativeItems)
-				{
-					auto declarativeItem = cast(DeclarativeItem)binding;
-					if (declarativeItem)
-						writefln("%s\n%s", declarativeItem.id, shiftRight(binding.displayDependents(), "\t", 1));
-				}
+				for (size_t index = 0; index < mItems.length; index++)
+					writefln("%s\n%s", mItems[index].id, shiftRight(mItems[index].displayDependents(), "\t", 1));
 				writeln("=======================================================================================================");
 			}
 		}
-		initializationPhase--;
-		luaL_unref(luaState, LUA_REGISTRYINDEX, mEnvStack[mEnvStack.length - 1]);
-
-		mEnvStack.length--;
+		mReentrencyLevel--;
 	}
 
 	void	execute(string text, string filePath)
@@ -790,15 +791,14 @@ public:
 	}
 
 protected:
-	dquick.script.iItemBinding.IItemBinding[void*]	mVoidToDeclarativeItems;
+	dquick.script.iItemBinding.IItemBinding[]		mItems;
 	dquick.script.iItemBinding.IItemBinding			mLastItemBindingCreated;
 	
 	package lua_State*	luaState;
 	IWindow		mWindow;
 	package dquick.script.propertyBinding.PropertyBinding[]		currentlyExecutedBindingStack;
 	string		itemTypeIds;
-	package alias TypeTuple!(int, float, string, bool, Object)	propertyTypes;
-	package int	initializationPhase;
+	package int	mReentrencyLevel;
 	int[string]	mComponentLuaReferences;
 	static if (showDebug)
 		package int	lvl;
@@ -854,12 +854,10 @@ extern(C)
 			lua_pop(L, 1);
 
 			T	itemBinding = new T();
-			itemBinding.dmlEngine = dmlEngine;
+			dmlEngine.addObjectBinding!T(itemBinding);
 
 			lua_remove(L, 1);
 			itemBinding.valueFromLua(L);
-
-			dmlEngine.addObjectBinding!T(itemBinding);
 
 			dquick.script.utils.valueToLua!T(L, itemBinding);
 
@@ -1036,8 +1034,6 @@ extern(C)
 					{
 						found = true;
 						__traits(getMember, itemBinding, member).bindingFromLua(L, 1);
-						if (dmlEngine.initializationPhase == false)					
-							__traits(getMember, itemBinding, member).executeBinding();
 						return 1;
 					}
 				}

@@ -588,7 +588,6 @@ private:
 	dquick.script.itemBinding.ItemBinding!T	registerItem(T)(T item, dquick.script.itemBinding.ItemBinding!T itemBinding)
 	{
 		assert((item in mItemsToItemBindings) is null);
-		itemBinding.dmlEngine = this;
 		ItemRefCounting	newRefCount;
 		newRefCount.count = 1;
 		newRefCount.iItemBinding = itemBinding;

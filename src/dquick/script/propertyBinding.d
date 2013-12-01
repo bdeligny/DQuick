@@ -55,17 +55,17 @@ class PropertyBinding
 	string	displayDependents()
 	{
 		string	result;
-		/*foreach (dependent; dependents)
-		{
-			result ~= format("%s.%s\n", itemBinding.id, dependent.propertyName);
-		}*/
+		foreach (dependent; dependents)
+			result ~= format("%s.%s\n", dependent.itemBinding.id, dependent.propertyName);
 		return result;
 	}
 
 	void	executeBinding()
 	{
-		//if (dirty == false)
-		//	return;
+		assert(itemBinding.dmlEngine !is null);
+
+		if (dirty == false || itemBinding.creating == true)
+			return;
 
 		if (luaReference != -1)
 		{
@@ -76,7 +76,7 @@ class PropertyBinding
 				int	loopCount = 0;
 				for (int index = cast(int)(itemBinding.dmlEngine.currentlyExecutedBindingStack.length - 1);  index >= 0; index--)
 				{
-					bindingLoopCallStack ~= itemBinding.id;
+					bindingLoopCallStack ~= itemBinding.dmlEngine.currentlyExecutedBindingStack[index].itemBinding.id;
 					bindingLoopCallStack ~= ".";
 					bindingLoopCallStack ~= itemBinding.dmlEngine.currentlyExecutedBindingStack[index].propertyName;
 					bindingLoopCallStack ~= "\n";
@@ -136,7 +136,7 @@ class PropertyBinding
 			{
 				foreach (dependency; dependencies)
 				{
-					writefln("%s dependent of %s.%s", replicate("|\t", itemBinding.dmlEngine.lvl), itemBinding.id, dependency.propertyName);
+					writefln("%sdepend on %s.%s", replicate("|\t", itemBinding.dmlEngine.lvl), dependency.itemBinding.id, dependency.propertyName);
 				}
 			}
 			foreach (dependency; dependencies)
@@ -155,11 +155,16 @@ class PropertyBinding
 
 	void	onChanged()
 	{
-		dirty = false;
-		if (itemBinding.creating == false && slotLuaReference != -1)
-			itemBinding.dmlEngine.execute(slotLuaReference);
-		if (itemBinding.dmlEngine && itemBinding.dmlEngine.initializationPhase == false)
+		if (itemBinding.dmlEngine is null)
+			return;
+
+		if (itemBinding.creating == false)
 		{
+			assert(dirty == true || luaReference == -1, format("%s.%s value assignement from D compete with his binding", itemBinding.id, propertyName));
+			dirty = false;
+			if (slotLuaReference != -1)
+				itemBinding.dmlEngine.execute(slotLuaReference);
+
 			static if (dquick.script.dmlEngine.DMLEngine.showDebug)
 			{
 				writefln("%s%s.%s.onChanged {", replicate("|\t", itemBinding.dmlEngine.lvl++), itemBinding.id, propertyName);
@@ -175,10 +180,12 @@ class PropertyBinding
 			foreach (dependent; dependentsCopy)
 			{
 				if (dependent !is null)
-				{
 					dependent.dirty = true;
+			}
+			foreach (dependent; dependentsCopy)
+			{
+				if (dependent !is null)
 					dependent.executeBinding();
-				}
 			}
 		}
 	}
@@ -215,6 +222,7 @@ class PropertyBinding
 			luaReference = luaL_ref(L, LUA_REGISTRYINDEX);
 			lua_pushnil(L); // To compensate the value poped by luaL_ref
 			dirty = true;
+			executeBinding();
 		}
 		else // Binding is juste a value
 		{

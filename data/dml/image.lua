@@ -1,7 +1,10 @@
 require "dml/button"
 
+total = 0
+
 function createImage(par, name, num)
 	if num < 40 then
+		total = total + 1
 		return 	Image {
 			id = name,
 			source = "images/pngtest.png",
@@ -21,6 +24,7 @@ function createImage(par, name, num)
 end
 
 GraphicItem {
+	id = "root",
 	Image {
 		id = "image",
 		source = "images/pngtest.png",
@@ -40,6 +44,13 @@ GraphicItem {
 			image.titi = image.toto
 	--		print("onTotoChanged = "..image.titi)		
 		end,
+	
+		width = function()
+			return root.width
+		end,
+		height = function()
+			return root.height
+		end,	
 	
 		Image {
 			id = "image2",
@@ -88,6 +99,26 @@ GraphicItem {
 				return image.height
 			end,
 		},
+		Text {
+			id = "text",
+			
+			wrapMode = Text.WrapMode.WordWrap,
+			width = 100,
+			height = 50,
+			x = function()
+				return image.width - 100
+			end,
+			y = function()
+				return image.height - 50
+			end,			
+
+			text = function() 
+				return total
+			end,
+			family = "Arial",
+			fontSize = 24,
+			fontStyle = Text.FontStyle.Regular,
+		},		
 	},
 }
 

@@ -16,15 +16,6 @@ import dquick.script.utils;
 static string	I_ITEM_BINDING()
 {
 	return BASE_ITEM_BINDING() ~ q"(
-		override void	dmlEngine(dquick.script.dmlEngineCore.DMLEngineCore dmlEngine)
-		{
-			assert(mDMLEngine is null || mDMLEngine is dmlEngine);
-			if (mDMLEngine != dmlEngine)
-			{
-				mDMLEngine = dmlEngine;
-				createItemBindingLuaEnv();
-			}
-		}
 	)";
 }
 
@@ -44,6 +35,15 @@ static string	BASE_ITEM_BINDING()
 	return q"(
 		dquick.script.dmlEngineCore.DMLEngineCore	mDMLEngine;
 		override dquick.script.dmlEngineCore.DMLEngineCore	dmlEngine() {return mDMLEngine;};
+		override void	dmlEngine(dquick.script.dmlEngineCore.DMLEngineCore dmlEngine)
+		{
+			assert(mDMLEngine is null || mDMLEngine is dmlEngine);
+			if (mDMLEngine != dmlEngine)
+			{
+				mDMLEngine = dmlEngine;
+				createItemBindingLuaEnv();
+			}
+		}
 
 		void	createItemBindingLuaEnv()
 		{
@@ -151,6 +151,11 @@ static string	BASE_ITEM_BINDING()
 						result ~= format("%s\n", member);
 						result ~= shiftRight(__traits(getMember, this, member).displayDependents(), "\t", 1);
 					}
+				}
+				foreach (key, virtualProperty; virtualProperties)
+				{
+					result ~= format("%s\n", key);
+					result ~= shiftRight(virtualProperty.displayDependents(), "\t", 1);
 				}
 				return result;
 			}
@@ -286,7 +291,7 @@ static string	BASE_ITEM_BINDING()
 	)";
 }
 
-static string	genProperties(T, propertyTypes...)()
+static string	genProperties(T)()
 {
 	string result = "";
 
@@ -531,18 +536,7 @@ class ItemBinding(T) : ItemBindingBase!(T) // Proxy that auto bind T
 
 	Object	itemObject() { return item;}
 
-	override void			dmlEngine(dquick.script.dmlEngineCore.DMLEngineCore dmlEngine)
-	{
-		assert(mDMLEngine is null || mDMLEngine is dmlEngine);
-		if (mDMLEngine != dmlEngine)
-		{
-			mDMLEngine = dmlEngine;
-			createItemBindingLuaEnv();
-			dmlEngine2.registerItem!T(item, this);
-		}
-	}
-
-	mixin(genProperties!(T, dquick.script.dmlEngine.DMLEngine.propertyTypes));
+	mixin(genProperties!(T));
 	
 	mixin(ITEM_BINDING());
 }

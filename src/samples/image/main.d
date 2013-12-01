@@ -29,8 +29,8 @@ int main(string[] args)
 		mainWindow.setSize(Vector2s32(800, 600));
 		mainWindow.create();
 
-//		mainWindow.setMainItem("dml/text - constitution.lua");
-		mainWindow.setMainItem("dml/image2.lua");
+		mainWindow.setMainItem("dml/text - constitution.lua");
+//		mainWindow.setMainItem("dml/image2.lua");
 
 		mainWindow.show();
 
