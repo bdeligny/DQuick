@@ -182,7 +182,7 @@ unittest
 	dmlEngine.create();
 	dmlEngine.addObjectBindingType!(Item, "Item");
 
-	// Test basic item
+	/+// Test basic item
 	string lua1 = q"(
 		Item {
 			id = "item1"
@@ -235,9 +235,35 @@ unittest
 		item4.nativeProperty = 500
 	)";
 	dmlEngine.execute(lua4, "");
-	assert(dmlEngine.getLuaGlobal!Item("item4").nativeTotalProperty == 10500);
+	assert(dmlEngine.getLuaGlobal!Item("item4").nativeTotalProperty == 10500);+/
 
-	// Test property binding
+	// Test signals 2
+	{
+		string lua = q"(
+			Item {
+				id = "item4_1",
+				nativeTotalProperty = 0,
+				virtualProperty = function()
+					return 1000
+				end,
+				onVirtualPropertyChanged = function()
+					item4_1.nativeTotalProperty = item4_1.nativeTotalProperty + item4_1.virtualProperty
+				end,
+				nativeProperty = function()
+					return 100
+				end,
+				onNativePropertyChanged = function()
+					item4_1.nativeTotalProperty = item4_1.nativeTotalProperty + item4_1.nativeProperty
+				end,
+			}
+			item4_1.virtualProperty = 10000
+			item4_1.nativeProperty = 500
+		)";
+		dmlEngine.execute(lua, "");
+		assert(dmlEngine.getLuaGlobal!Item("item4_1").nativeTotalProperty == 10500);
+	}
+
+	/+// Test property binding
 	string lua5 = q"(
 		Item {
 			id = "item5",
@@ -544,7 +570,7 @@ unittest
 		dmlEngine.execute(lua, "");
 		assert(dmlEngine.getLuaGlobal!Item("item20").nativeProperty == 10);
 		assert(dmlEngine.getLuaGlobal!Item("item20").nativeTotalProperty == 10);
-	}
+	}+/
 	}
 	catch (Throwable e)
 	{
@@ -765,16 +791,9 @@ public:
 		lua_rawgeti(luaState, LUA_REGISTRYINDEX, functionRef);
 		if (lua_pcall(luaState, 0, LUA_MULTRET, 0) != LUA_OK)
 		{
-			const char* error = lua_tostring(luaState, -1);
-			writeln("DMLEngineCore.execute: error: " ~ to!(string)(error));
+			string error = to!(string)(lua_tostring(luaState, -1));
 			lua_pop(luaState, 1);
-			assert(false);
-
-			version (release)
-			{
-				currentlyExecutedBindingRef = -1;
-				return;
-			}
+			throw new Exception(format("lua_pcall error: %s", error));
 		}
 	}
 
@@ -798,7 +817,7 @@ public:
 		lua_setglobal(luaState, name.toStringz());
 	}
 
-	static immutable bool showDebug = 0;
+	static immutable bool showDebug = 1;
 
 	int		currentLuaEnv()
 	{

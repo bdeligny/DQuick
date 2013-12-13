@@ -137,7 +137,7 @@ version(unittest)
 
 unittest
 {
-	DMLEngine	dmlEngine = new DMLEngine;
+	/+DMLEngine	dmlEngine = new DMLEngine;
 	dmlEngine.create();
 	dmlEngine.addItemType!(Item, "Item");
 
@@ -504,7 +504,7 @@ unittest
 		dmlEngine.execute(lua, "");
 		assert(dmlEngine.getLuaGlobal!Item("item20").nativeProperty == 10);
 		assert(dmlEngine.getLuaGlobal!Item("item20").nativeTotalProperty == 10);
-	}
+	}+/
 }
 
 class DMLEngine : dquick.script.dmlEngineCore.DMLEngineCore

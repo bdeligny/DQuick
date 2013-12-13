@@ -225,6 +225,7 @@ static string	BASE_ITEM_BINDING()
 								lua_pop(L, 1);
 
 								virtualProperty.slotLuaReference = luaL_ref(L, LUA_REGISTRYINDEX);
+								writefln("%s %d", propertyName, virtualProperty.slotLuaReference);
 								lua_pushnil(L); // To compensate the value poped by luaL_ref
 							}
 							else
