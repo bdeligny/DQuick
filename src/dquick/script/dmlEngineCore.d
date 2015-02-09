@@ -57,6 +57,8 @@ public:
 		mEnvStack ~= luaL_ref(luaState, LUA_REGISTRYINDEX);
 
 		mInitializedItemCount = 0;
+
+		mIsReloading = false;
 	}
 
 	void	destroy()
@@ -138,6 +140,28 @@ public:
 			setLuaGlobal(id, object);
 	}
 
+	void	removeObjectBinding(T)(T object, string id = "")
+	{
+		static assert(is(T : dquick.script.iItemBinding.IItemBinding), "object must inherit from IItemBinding");
+		static assert(!is(T == dquick.script.iItemBinding.IItemBinding), "object must inherit from IItemBinding but not be an IItemBinding");
+
+		if (object !is null)
+		{
+			if (object.dmlEngine !is null)
+			{
+				auto index = countUntil(mItems, object);
+				assert(index != -1, format("Object \"%s\" has not been added", id));
+				if (index < mInitializedItemCount)
+					mInitializedItemCount--;
+				remove(mItems, index);
+				object.dmlEngine = null;
+			}
+		}
+
+		if (id != "")
+			removeLuaGlobal(id);
+	}
+
 	bool	isCreated()
 	{
 		return luaState != null;
@@ -151,18 +175,45 @@ public:
 		execute();
 	}
 
+	// Add lua code to the cache as if it was a file without loading or executing it, usefull to create a component without writing it in a real file
+	void	addFile(string text, string filePath)
+	{
+		if (filePath == "")
+			throw new Exception("Need a filePath");
+
+		auto textPtr = (filePath in mFiles);
+		if (textPtr != null) // Ask for a reload, we need to update items instanciated with this component
+		{
+			mIsReloading = true;
+			load(text, filePath);
+			execute();
+			mIsReloading = false;
+		}
+
+		mFiles[filePath] = text;
+	}
+
+	// Load a real file on the lua stack
 	void	loadFile(string filePath)
 	{
 		assert(isCreated());
 
 		string	text;
-		text = cast(string)read(filePath);
+		auto textPtr = (filePath in mFiles);
+		if (textPtr != null)
+			text = *textPtr;
+		else
+			text = cast(string)read(filePath);
 		load(text, filePath);
 	}
 
+	// Load lua code on the lua stack as if it was a file
 	void	load(string text, string filePath)
 	{
 		assert(isCreated());
+
+		if (filePath != "" && mIsReloading == false)
+			addFile(text, filePath);
 
 		if (luaL_loadbuffer(luaState, cast(const char*)text.ptr, text.length, filePath.toStringz()) != LUA_OK)
 		{
@@ -225,6 +276,12 @@ public:
 	void	setLuaGlobal(T)(string name, T value)
 	{
 		dquick.script.utils.valueToLua!T(luaState, value);
+		lua_setglobal(luaState, name.toStringz());
+	}
+
+	void	removeLuaGlobal(string name)
+	{
+		lua_pushnil(luaState);
 		lua_setglobal(luaState, name.toStringz());
 	}
 
@@ -309,6 +366,8 @@ protected:
 	static if (showDebug)
 		package int	lvl;
 	int[]		mEnvStack;
+	string[string]	mFiles;
+	bool		mIsReloading;
 }
 
 extern(C)
@@ -344,9 +403,31 @@ extern(C)
 			DMLEngineCore	dmlEngine = cast(DMLEngineCore)lua_touserdata(L, -1);
 			lua_pop(L, 1);
 
-			T	itemBinding = new T();
-			dmlEngine.addObjectBinding!T(itemBinding);
-			dmlEngine.mLastItemBindingCreated = itemBinding;
+			T	itemBinding = null;
+			if (dmlEngine.mIsReloading)
+			{
+				// Get id from lua table
+				lua_pushstring(L, "id");
+				lua_gettable(L, -2);
+				if (lua_isstring(L, -1))
+				{
+					string	id;
+					valueFromLua(L, -1, id);
+					lua_pop(L, 1);
+					foreach (item; dmlEngine.mItems)
+					{
+						if (item.id == id)
+							itemBinding = cast(T)item;
+					}
+				}
+			}
+
+			if (itemBinding is null)
+			{
+				itemBinding = new T();
+				dmlEngine.addObjectBinding!T(itemBinding);
+				dmlEngine.mLastItemBindingCreated = itemBinding;
+			}
 
 			lua_remove(L, 1);
 			(cast(IItemBinding)(itemBinding)).valuesFromLuaTable(L);

@@ -2311,7 +2311,7 @@ unittest
 			}
 			dgItem2.delegateProperty = dgItem2.delegateProperty -- Test value from D to lua then from lua to D
 		)";
-		dmlEngine.execute(lua, "Delegate");
+		dmlEngine.execute(lua, "Delegate to lua");
 		int	delegate(int)	dg = dmlEngine.getLuaGlobal!(Item)("dgItem2").delegateProperty;
 		assert(dg(300) == 600);
 		dmlEngine.execute("dgItem2.delegateProperty = nil", "Delegate");
@@ -2715,6 +2715,70 @@ unittest
 		assert((cast(ListView1Component)(listView104.children[0])).name == "item140_2View");
 		assert((cast(ListView1Component)(listView104.children[1])).name == "item141_2View");
 		assert((cast(ListView1Component)(listView104.children[2])).name == "item142_2View");
+	}
+
+	/*// Simulate a simple reloading
+	{
+		string lua1 = q"(
+			Item {
+				id = "reloadingItem1"
+				nativeProperty = 100,
+				virtualProperty = 200,
+				nativeTotalProperty = 300
+			}
+		)";
+		dmlEngine.execute(lua1, "");
+		string lua2 = q"(
+			Item {
+				id = "reloadingItem1"
+				nativeProperty = 400,
+				virtualProperty = 200,
+				nativeTotalProperty = 300
+			}
+		)";
+		dmlEngine.execute(lua2, "");
+		assert(dmlEngine.getLuaGlobal!Item("reloadingItem1").nativeProperty == 400);
+		assert(dmlEngine.getLuaGlobal!Item("reloadingItem1").virtualProperty == 200);
+		assert(dmlEngine.getLuaGlobal!Item("reloadingItem1").nativeTotalProperty == 300);
+	}*/
+
+	// Simulate a component reloading
+	{
+		string	component = q"(
+			Item {
+				id = "reloadingComponentRoot",
+				virtualProperty = 600,
+				nativeProperty = 700,
+				nativeTotalProperty = function()
+					return virtualProperty
+				end
+			}
+		)";
+		dmlEngine.addFile(component, "ReloadingComponent.lua");
+
+		string lua = q"(
+			ImportComponent("ReloadingComponent.lua")
+			Item {
+				id = "reloadingItem2",
+				ReloadingComponent {
+					id = "reloadingItem3",
+					nativeProperty = 710,
+				},
+			}
+		)";
+		dmlEngine.execute(lua, "");
+
+		string	component2 = q"(
+			Item {
+				id = "reloadingComponentRoot",
+				virtualProperty = 620,
+				nativeProperty = 720,
+			}
+		)";
+		dmlEngine.addFile(component, "ReloadingComponent.lua");
+
+		assert(dmlEngine.getLuaGlobal!Item("reloadingItem3").nativeTotalProperty == 620);
+		assert(dmlEngine.getLuaGlobal!Item("reloadingItem3").nativeProperty == 710);
 	}
 
 	}

@@ -147,7 +147,10 @@ public:
 			// Regenerate children
 			auto childrenCopy = children;
 			foreach (DeclarativeItem child; childrenCopy)
+			{
 				removeChild(child);
+				dmlEngine.removeObjectBinding!DeclarativeItem(child);
+			}
 
 			{ // For the scope(exit)
 				dmlEngine.beginTransaction();
@@ -305,7 +308,7 @@ protected:
 
 unittest
 {
-	DMLEngineCore	dmlEngine = new DMLEngineCore;
+	/+DMLEngineCore	dmlEngine = new DMLEngineCore;
 	dmlEngine.create();
 	dmlEngine.addObjectBindingType!(DeclarativeItem, "Item");
 	dmlEngine.addObjectBindingType!(GraphicItem, "GraphicItem");
@@ -348,5 +351,5 @@ unittest
 		assert((cast(GraphicItem)dmlEngine.getLuaGlobal!GraphicItem("gridRepeater1").children[0]).x == 0);
 		assert((cast(GraphicItem)dmlEngine.getLuaGlobal!GraphicItem("gridRepeater1").children[1]).x == 36);
 		assert((cast(GraphicItem)dmlEngine.getLuaGlobal!GraphicItem("gridRepeater1").children[2]).x == 0);
-	}
+	}+/
 }
