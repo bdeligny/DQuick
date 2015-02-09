@@ -377,7 +377,7 @@ unittest
 	dmlEngine.addObjectBindingType!(dquick.script.dmlEngineCoreUnittests.ListView1Component, "ListView1Component");
 	dmlEngine.addItemType!(ListView1ModelItem, "ListView1ModelItem");
 
-	// Test basic item
+	/+// Test basic item
 	string lua1 = q"(
 		Item {
 			id = "item1"
@@ -2333,5 +2333,5 @@ unittest
 		assert((cast(ListView1Component)(listView104.children[1])).name == "item141_2View");
 		assert((cast(ListView1Component)(listView104.children[2])).name == "item142_2View");
 		assert(dmlEngine.rootItem!ListView1() is null);
-	}
+	}+/
 }
