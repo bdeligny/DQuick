@@ -96,7 +96,7 @@ static string	BASE_ITEM_BINDING()
 					return __itemBinding_env
 				end
 			)";
-			dmlEngine.load(lua, "ItemBindingLuaEnv");
+			dmlEngine.__load(lua, "ItemBindingLuaEnv");
 
 			// Put component env
 			lua_rawgeti(dmlEngine.luaState, LUA_REGISTRYINDEX, dmlEngine.currentLuaEnv);
@@ -104,7 +104,7 @@ static string	BASE_ITEM_BINDING()
 			if (envUpvalue == null) // No access to env, env table is still on the stack so we need to pop it
 				lua_pop(dmlEngine.luaState, 1);
 
-			dmlEngine.execute();
+			dmlEngine.__execute();
 
 			// Get new env table
 			lua_rawgeti(dmlEngine.luaState, LUA_REGISTRYINDEX, dmlEngine.currentLuaEnv);

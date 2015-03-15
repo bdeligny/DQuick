@@ -167,96 +167,36 @@ public:
 		return luaState != null;
 	}
 
+	/// Load and execute a file. Load from cache, use loadFile to force a reload
 	void	executeFile(string filePath)
 	{
 		assert(isCreated());
 
-		loadFile(filePath);
-		execute();
+		loadFileFromCache(filePath);
+		__execute();
 	}
 
-	// Add lua code to the cache as if it was a file without loading or executing it, usefull to create a component without writing it in a real file
-	void	addFile(string text, string filePath)
+	/// Load lua code as if it was a file and executing it, usefull to execute lua code without writing it in a real file
+	void	execute(string text, string filePath)
 	{
-		if (filePath == "")
-			throw new Exception("Need a filePath");
-
-		auto textPtr = (filePath in mFiles);
-		if (textPtr != null) // Ask for a reload, we need to update items instanciated with this component
-		{
-			mIsReloading = true;
-			load(text, filePath);
-			execute();
-			mIsReloading = false;
-		}
-
-		mFiles[filePath] = text;
+		__load(text, filePath);
+		__execute();
 	}
 
-	// Load a real file on the lua stack
+	/// Load a real file, update already instanciated components
 	void	loadFile(string filePath)
 	{
 		assert(isCreated());
 
-		string	text;
-		auto textPtr = (filePath in mFiles);
-		if (textPtr != null)
-			text = *textPtr;
-		else
-			text = cast(string)read(filePath);
-		load(text, filePath);
+		__load(text, filePath);
+		lua_pop(luaState, -1);
 	}
 
-	// Load lua code on the lua stack as if it was a file
-	void	load(string text, string filePath)
+	/// Load lua code as if it was a file without executing it, usefull to create a component without writing it in a real file. Update already instanciated components in case of reload
+	void	loadFile(string text, string filePath)
 	{
-		assert(isCreated());
-
-		if (filePath != "" && mIsReloading == false)
-			addFile(text, filePath);
-
-		if (luaL_loadbuffer(luaState, cast(const char*)text.ptr, text.length, filePath.toStringz()) != LUA_OK)
-		{
-			const char* error = lua_tostring(luaState, -1);
-			writeln("DMLEngineCore.execute: error: " ~ to!(string)(error));
-			lua_pop(luaState, 1);
-			assert(false);
-
-			version (release)
-			{
-				return;
-			}
-		}
-	}
-
-	void	execute()
-	{
-		assert(isCreated());
-
-		// Save _ENV
-		const char*	upvalue = lua_getupvalue(luaState, -1, 1);
-		if (upvalue == null)
-			throw new Exception("no _ENV upvalue");
-		if (strcmp(upvalue, "_ENV") != 0)
-		{
-			lua_pop(luaState, 1);
-			throw new Exception("no _ENV upvalue");
-		}
-		mEnvStack ~= luaL_ref(luaState, LUA_REGISTRYINDEX);
-
-		static if (showDebug)
-			writeln("execute: CREATE ==================================================================================================");
-
-		mRootItemBinding = luaPCall(0);
-
-		luaL_unref(luaState, LUA_REGISTRYINDEX, mEnvStack[mEnvStack.length - 1]);
-		mEnvStack.length--;
-	}
-
-	void	execute(string text, string filePath)
-	{
-		load(text, filePath);
-		execute();
+		__load(text, filePath);
+		lua_pop(luaState, -1);
 	}
 
 	T	rootItemBinding(T)()
@@ -332,7 +272,75 @@ public:
 	uint	propertyBindingStackSize = 50;
 
 	lua_State*	luaState() { return mLuaState; }
+
+	/// Load lua code on the lua stack and put in in the cache. Private API
+	void	__load(string text, string filePath)
+	{
+		assert(isCreated());
+
+		if (filePath == "")
+			throw new Exception("Need a filePath");
+
+		auto luaRef = (filePath in mFiles);
+		if (luaRef != null)
+		{
+			luaL_unref(luaState, LUA_REGISTRYINDEX, *luaRef);
+		}
+		else
+		{
+			if (luaL_loadbuffer(luaState, cast(const char*)text.ptr, text.length, filePath.toStringz()) != LUA_OK)
+			{
+				string error = to!(string)(lua_tostring(luaState, -1));
+				lua_pop(luaState, 1);
+				throw new Exception(error);
+			}
+		}
+		lua_pushvalue(luaState, -1);// To compensate the value poped by luaL_ref
+		mFiles[filePath] = luaL_ref(luaState, LUA_REGISTRYINDEX);
+	}
+
+	/// Execute lua code already on the stack. Private API
+	void	__execute()
+	{
+		assert(isCreated());
+
+		// Save _ENV
+		const char*	upvalue = lua_getupvalue(luaState, -1, 1);
+		if (upvalue == null)
+			throw new Exception("no _ENV upvalue");
+		if (strcmp(upvalue, "_ENV") != 0)
+		{
+			lua_pop(luaState, 1);
+			throw new Exception("no _ENV upvalue");
+		}
+		mEnvStack ~= luaL_ref(luaState, LUA_REGISTRYINDEX);
+
+		static if (showDebug)
+			writeln("execute: CREATE ==================================================================================================");
+
+		mRootItemBinding = luaPCall(0);
+
+		luaL_unref(luaState, LUA_REGISTRYINDEX, mEnvStack[mEnvStack.length - 1]);
+		mEnvStack.length--;
+	}
 protected:
+	/// Load a real file on the lua stack. Try to load from cache, use loadFile to really reload the file from disk
+	void	loadFileFromCache(string filePath)
+	{
+		assert(isCreated());
+
+		auto luaRef = (filePath in mFiles);
+		if (luaRef != null)
+		{
+			lua_rawgeti(luaState, LUA_REGISTRYINDEX, *luaRef);
+		}
+		else
+		{
+			string text = cast(string)read(filePath);
+			__load(text, filePath);
+		}
+	}
+
 	package dquick.script.iItemBinding.IItemBinding		luaPCall(int paramCount)
 	{
 		assert(isCreated());
@@ -366,7 +374,7 @@ protected:
 	static if (showDebug)
 		package int	lvl;
 	int[]		mEnvStack;
-	string[string]	mFiles;
+	int[string]	mFiles;
 	bool		mIsReloading;
 }
 
@@ -387,6 +395,7 @@ extern(C)
 		}
 	}
 
+	/// Instanciate a D Item
 	private int	createLuaBind(T)(lua_State* L)
 	{
 		try
@@ -465,6 +474,7 @@ extern(C)
 		}
 	}
 
+	/// Return a property in an item
 	private int	indexLuaBind(T)(lua_State* L)
 	{
 		try
@@ -534,6 +544,7 @@ extern(C)
 		}
 	}
 
+	/// Assign a property in an item
 	private int	newindexLuaBind(T)(lua_State* L)
 	{
 		try
@@ -590,7 +601,7 @@ extern(C)
 		}
 	}
 
-	// Handle simple function binding
+	/// Call a simple D function
 	private int	functionLuaBind(alias func)(lua_State* L)
 	{
 		try
@@ -606,7 +617,7 @@ extern(C)
 		}
 	}
 
-	// Handle method binding
+	/// Call a D method
 	private int	methodCallLuaBind(string methodName, T)(lua_State* L)
 	{
 		try
@@ -637,19 +648,20 @@ extern(C)
 			return 0;
 		}
 	}
-	// Index metamethod to warn user that it's a method
+	/// Try to return a property on a metamethod to warn user that it's a method
 	private int	methodIndexLuaBind(string methodName, T)(lua_State* L)
 	{
 		luaError(L, "attempt to index a method");
 		return 0;
 	}
-	// newIndex metamethod to warn user that it's a method
+	/// Try to assign a property on a metamethod to warn user that it's a method
 	private int	methodNewIndexLuaBind(string methodName, T)(lua_State* L)
 	{
 		luaError(L, "attempt to assign a method");
 		return 0;
 	}
 
+	/// Import a component
 	private int	importComponentLuaBind(lua_State* L)
 	{
 		try
@@ -696,6 +708,7 @@ extern(C)
 		}
 	}
 
+	/// Instanciate a component
 	private int	createComponentLuaBind(lua_State* L)
 	{
 		try
@@ -721,8 +734,8 @@ extern(C)
 					end
 				end
 			)";
-			dmlEngine.load(lua, "ComponentEnvChaining");
-			dmlEngine.execute();
+			dmlEngine.__load(lua, "ComponentEnvChaining");
+			dmlEngine.__execute();
 
 			// Get component code
 			string	path = to!(string)(lua_tostring(L, lua_upvalueindex(1)));
@@ -757,7 +770,7 @@ extern(C)
 			if (envUpvalue == null) // No access to env, env table is still on the stack so we need to pop it
 				lua_pop(dmlEngine.luaState, 1);
 			// Execute component code
-			dmlEngine.execute();
+			dmlEngine.__execute();
 
 			dquick.script.iItemBinding.IItemBinding	iItemBinding = dmlEngine.rootItemBinding!(dquick.script.iItemBinding.IItemBinding)();
 			if (iItemBinding is null || iItemBinding == previousRootItem)
@@ -806,6 +819,7 @@ extern(C)
 		}
 	}
 
+	/// Index a D array
 	private int	arrayIndexLuaBind(T)(lua_State* L)
 	{
 		try
@@ -880,6 +894,7 @@ extern(C)
 		}
 	}
 
+	/// Assign a D array
 	private int	arrayNewindexLuaBind(T)(lua_State* L)
 	{
 		try

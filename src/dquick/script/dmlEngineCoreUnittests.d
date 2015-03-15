@@ -2754,7 +2754,7 @@ unittest
 				end
 			}
 		)";
-		dmlEngine.addFile(component, "ReloadingComponent.lua");
+		dmlEngine.loadFile(component, "ReloadingComponent.lua");
 
 		string lua = q"(
 			ImportComponent("ReloadingComponent.lua")
@@ -2773,9 +2773,12 @@ unittest
 				id = "reloadingComponentRoot",
 				virtualProperty = 620,
 				nativeProperty = 720,
+				nativeTotalProperty = function()
+					return virtualProperty
+				end
 			}
 		)";
-		dmlEngine.addFile(component, "ReloadingComponent.lua");
+		dmlEngine.loadFile(component, "ReloadingComponent.lua");
 
 		assert(dmlEngine.getLuaGlobal!Item("reloadingItem3").nativeTotalProperty == 620);
 		assert(dmlEngine.getLuaGlobal!Item("reloadingItem3").nativeProperty == 710);
