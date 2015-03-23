@@ -731,7 +731,7 @@ unittest
 			id = "item1"
 		}
 	)";
-	dmlEngine.execute(lua1, "");
+	dmlEngine.execute(lua1, "Test basic item");
 	assert(dmlEngine.getLuaGlobal!Item("item1") !is null);
 	assert(dmlEngine.rootItemBinding!DeclarativeItem() !is null);
 	assert(dmlEngine.rootItemBinding!DeclarativeItem().id == "item1");
@@ -743,7 +743,7 @@ unittest
 			nativeProperty = 100
 		}
 	)";
-	dmlEngine.execute(lua2, "");
+	dmlEngine.execute(lua2, "Test native property");
 	assert(dmlEngine.getLuaGlobal!Item("item2").nativeProperty == 100);
 	dmlEngine.execute("item2.nativeProperty = item2.nativeProperty * 2", "");
 	assert(dmlEngine.getLuaGlobal!Item("item2").nativeProperty == 200);
@@ -757,7 +757,7 @@ unittest
 		}
 		item3.nativeProperty = item3.virtualProperty + item3.nativeProperty
 	)";
-	dmlEngine.execute(lua3, "");
+	dmlEngine.execute(lua3, "Test virtual property");
 	assert(dmlEngine.getLuaGlobal!Item("item3").nativeProperty == 1100);
 
 	// Test signals
@@ -777,7 +777,7 @@ unittest
 		item4.virtualProperty = 10000
 		item4.nativeProperty = 500
 	)";
-	dmlEngine.execute(lua4, "");
+	dmlEngine.execute(lua4, "Test signals");
 	assert(dmlEngine.getLuaGlobal!Item("item4").nativeTotalProperty == 10500);
 
 	// Test signals 2 (slot call it's own binding)
@@ -794,7 +794,7 @@ unittest
 				end,
 			}
 		)";
-		dmlEngine.execute(lua, "");
+		dmlEngine.execute(lua, "Test signals 2 (slot call it's own binding)");
 		assert(dmlEngine.getLuaGlobal!Item("item4_1").nativeTotalProperty == 1500);
 	}
 
@@ -817,7 +817,7 @@ unittest
 			end
 		}
 	)";
-	dmlEngine.execute(lua5, "");
+	dmlEngine.execute(lua5, "Test property binding");
 	assert(dmlEngine.getLuaGlobal!Item("item7").nativeTotalProperty == 175);
 
 	// Test native property anti hijack protection (property assignment from D that compete with his binding)
@@ -830,7 +830,7 @@ unittest
 				end
 			}
 		)";
-		dmlEngine.execute(lua, "");
+		dmlEngine.execute(lua, "Test native property anti hijack protection");
 		assert(dmlEngine.getLuaGlobal!Item("item7_1").nativeProperty == 100);
 		dmlEngine.getLuaGlobal!Item("item7_1").nativeProperty = 200;
 		assert(dmlEngine.getLuaGlobal!Item("item7_1").nativeProperty == 100);
@@ -895,7 +895,7 @@ unittest
 			nativeEnumProperty = Item.Enum.enumVal2
 		}
 	)";
-	dmlEngine.execute(lua7, "");
+	dmlEngine.execute(lua7, "Test enums");
 	assert(dmlEngine.getLuaGlobal!Item("item11").nativeEnumProperty == Item.Enum.enumVal2);
 
 	// Test simple property alias (parent to child)
@@ -925,7 +925,7 @@ unittest
 		}
 		item12.nativePropertyAlias = 200
 	)";
-	dmlEngine.execute(lua8, "");
+	dmlEngine.execute(lua8, "Test simple property alias (parent to child)");
 	assert(dmlEngine.getLuaGlobal!Item("item13").nativeProperty == 200);
 
 	// Test 2 ways property alias (parent to child and parent to child, usefull for buttons that can be checked from qml or mouse input)
@@ -950,10 +950,10 @@ unittest
 			end,
 		}
 	)";
-	dmlEngine.execute(lua9, "");
+	dmlEngine.execute(lua9, "Test 2 ways property alias");
 	assert(dmlEngine.getLuaGlobal!Item("item15").nativeProperty == 100); // Test init value propagation
 
-	dmlEngine.execute("item14.nativePropertyAlias = 200", "");
+	dmlEngine.execute("item14.nativePropertyAlias = 200", "Test 2 ways property alias 2");
 	assert(dmlEngine.getLuaGlobal!Item("item15").nativeProperty == 200); // Test propagation from parent to child
 
 	dmlEngine.getLuaGlobal!Item("item15").nativeProperty = 300;
@@ -964,12 +964,12 @@ unittest
 	string lua10 = q"(
 		test = testSumFunctionBinding(100, 200)
 	)";
-	dmlEngine.execute(lua10, "");
+	dmlEngine.execute(lua10, "Test function binding");
 	assert(dmlEngine.getLuaGlobal!int("test") == 300);
 
 	// Test function binding with polymorphic object parameters
 	dmlEngine.addFunction!(testSumFunctionBinding2, "testSumFunctionBinding2")();
-	dmlEngine.execute("test2 = testSumFunctionBinding2(item2, item3)", "");
+	dmlEngine.execute("test2 = testSumFunctionBinding2(item2, item3)", "Test function binding with polymorphic object parameters");
 	assert(dmlEngine.getLuaGlobal!int("test2") == 1300);
 
 	// Test already existing class instance binding
@@ -979,7 +979,7 @@ unittest
 	string lua11 = q"(
 		testObject.nativeProperty = 2000;
 	)";
-	dmlEngine.execute(lua11, "");
+	dmlEngine.execute(lua11, "Test already existing class instance binding");
 	assert(testObject.nativeProperty == 2000);
 
 	// Test normal method binding
@@ -989,11 +989,11 @@ unittest
 	string lua12 = q"(
 		total = testObject2.testNormalMethod(1, 10)
 	)";
-	dmlEngine.execute(lua12, "");
+	dmlEngine.execute(lua12, "Test normal method binding");
 	assert(dmlEngine.getLuaGlobal!int("total") == 111);
 
 	// Test normal method binding with polymorphic object parameters
-	dmlEngine.execute("total2 = testObject2.testNormalMethod2(item2, item3)", "");
+	dmlEngine.execute("total2 = testObject2.testNormalMethod2(item2, item3)", "Test normal method binding with polymorphic object parameters");
 	assert(dmlEngine.getLuaGlobal!int("total2") == 1400);
 
 	// Test subitem property binding
@@ -1001,34 +1001,34 @@ unittest
 		Item	testObject3 = new Item;
 		dmlEngine.addObjectBinding(testObject3, "testObject3");
 
-		dmlEngine.execute("subItemGlobal1 = testObject3.nativeSubItem", "");
+		dmlEngine.execute("subItemGlobal1 = testObject3.nativeSubItem", "Test subitem property binding");
 		assert(dmlEngine.getLuaGlobal!SubItem("subItemGlobal1") is null);
 
 		testObject3.nativeSubItem = new SubItem;
-		dmlEngine.execute("subItemGlobal2 = testObject3.nativeSubItem", "");
+		dmlEngine.execute("subItemGlobal2 = testObject3.nativeSubItem", "Test subitem property binding 2");
 		assert(dmlEngine.getLuaGlobal!SubItem("subItemGlobal2") !is null);
 
 		testObject3.nativeSubItem.nativeProperty = 10;
-		dmlEngine.execute("subItemGlobal3 = testObject3.nativeSubItem.nativeProperty", "");
+		dmlEngine.execute("subItemGlobal3 = testObject3.nativeSubItem.nativeProperty", "Test subitem property binding 3");
 		assert(dmlEngine.getLuaGlobal!int("subItemGlobal3") == 10);
-		dmlEngine.execute("subItemGlobal4 = subItemGlobal2.nativeProperty", "");
+		dmlEngine.execute("subItemGlobal4 = subItemGlobal2.nativeProperty", "Test subitem property binding 4");
 		assert(dmlEngine.getLuaGlobal!int("subItemGlobal4") == 10);
 
 		testObject3.nativeSubItem = new SubItem;
 		testObject3.nativeSubItem.nativeProperty = 20;
-		dmlEngine.execute("subItemGlobal5 = testObject3.nativeSubItem.nativeProperty", "");
+		dmlEngine.execute("subItemGlobal5 = testObject3.nativeSubItem.nativeProperty", "Test subitem property binding 5");
 		assert(dmlEngine.getLuaGlobal!int("subItemGlobal5") == 20);
 
 		dmlEngine.addObjectBinding(testObject3, "testObject4");
-		dmlEngine.execute("subItemGlobal6 = testObject3.nativeSubItem", "");
-		dmlEngine.execute("subItemGlobal7 = testObject4.nativeSubItem", "");
+		dmlEngine.execute("subItemGlobal6 = testObject3.nativeSubItem", "Test subitem property binding 5");
+		dmlEngine.execute("subItemGlobal7 = testObject4.nativeSubItem", "Test subitem property binding 6");
 		assert(dmlEngine.getLuaGlobal!SubItem("subItemGlobal6") is dmlEngine.getLuaGlobal!SubItem("subItemGlobal7"));
 
-		dmlEngine.execute("testObject3.nativeSubItem.nativeProperty = 30", "");
+		dmlEngine.execute("testObject3.nativeSubItem.nativeProperty = 30", "Test subitem property binding 7");
 		assert(testObject3.nativeSubItem.nativeProperty == 30);
 
 		testObject3.nativeSubItem = new SubItem;
-		dmlEngine.execute("testObject3.nativeSubItem = nil", "");
+		dmlEngine.execute("testObject3.nativeSubItem = nil", "Test subitem property binding 8");
 		assert(testObject3.nativeSubItem is null);
 		testObject3.nativeSubItem = new SubItem;
 		assert(testObject3.nativeSubItem !is null);
@@ -1037,11 +1037,11 @@ unittest
 
 		Item	testObject5 = new Item;
 		dmlEngine.addObjectBinding(testObject5, "testObject5");
-		dmlEngine.execute("testObject3.nativeSubItem = testObject5.nativeSubItem", "");
+		dmlEngine.execute("testObject3.nativeSubItem = testObject5.nativeSubItem", "Test subitem property binding 9");
 		assert(testObject3.nativeSubItem is null);
 		testObject5.nativeSubItem = new SubItem;
-		dmlEngine.execute("testObject3.nativeSubItem = testObject5.nativeSubItem", "");
-		dmlEngine.execute("subItemGlobal8 = testObject3.nativeSubItem", "");
+		dmlEngine.execute("testObject3.nativeSubItem = testObject5.nativeSubItem", "Test subitem property binding 10");
+		dmlEngine.execute("subItemGlobal8 = testObject3.nativeSubItem", "Test subitem property binding 11");
 		assert(dmlEngine.getLuaGlobal!SubItem("subItemGlobal8") is testObject5.nativeSubItem);
 	}
 
@@ -1100,7 +1100,7 @@ unittest
 				},
 			}
 		)";
-		dmlEngine.execute(lua, "");
+		dmlEngine.execute(lua, "Component");
 		Item	item17 = dmlEngine.getLuaGlobal!Item("item17");
 		Item	item18 = dmlEngine.getLuaGlobal!Item("item18");
 		assert(item17 !is null);
@@ -1124,7 +1124,7 @@ unittest
 				end
 			}
 		)";
-		dmlEngine.execute(lua, "");
+		dmlEngine.execute(lua, "Explicit this");
 		assert(dmlEngine.getLuaGlobal!Item("item19").nativeProperty == 10);
 		assert(dmlEngine.getLuaGlobal!Item("item19").nativeTotalProperty == 10);
 	}
@@ -1143,7 +1143,7 @@ unittest
 				end
 			}
 		)";
-		dmlEngine.execute(lua, "");
+		dmlEngine.execute(lua, "Implicit this");
 		assert(dmlEngine.getLuaGlobal!Item("item20").nativeProperty == 10);
 		assert(dmlEngine.getLuaGlobal!Item("item20").nativeTotalProperty == 10);
 	}
