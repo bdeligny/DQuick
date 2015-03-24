@@ -745,7 +745,7 @@ unittest
 	)";
 	dmlEngine.execute(lua2, "Test native property");
 	assert(dmlEngine.getLuaGlobal!Item("item2").nativeProperty == 100);
-	dmlEngine.execute("item2.nativeProperty = item2.nativeProperty * 2", "");
+	dmlEngine.execute("item2.nativeProperty = item2.nativeProperty * 2", "Test native property 2");
 	assert(dmlEngine.getLuaGlobal!Item("item2").nativeProperty == 200);
 
 	// Test virtual property
@@ -897,18 +897,6 @@ unittest
 	)";
 	dmlEngine.execute(lua7, "Test enums");
 	assert(dmlEngine.getLuaGlobal!Item("item11").nativeEnumProperty == Item.Enum.enumVal2);
-
-	// Test simple property alias (parent to child)
-	string lua7_2 = q"(
-		Item {
-			id = "item7_2",
-
-			Item {
-				id = "item7_3",
-			}
-		}
-	)";
-	dmlEngine.execute(lua7_2, "");
 
 	// Test simple property alias (parent to child)
 	string lua8 = q"(

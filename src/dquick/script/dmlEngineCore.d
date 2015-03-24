@@ -188,6 +188,7 @@ public:
 	{
 		assert(isCreated());
 
+		auto text = cast(string)read(filePath);
 		__load(text, filePath);
 		lua_pop(luaState, -1);
 	}
@@ -285,16 +286,16 @@ public:
 		if (luaRef != null)
 		{
 			luaL_unref(luaState, LUA_REGISTRYINDEX, *luaRef);
+			mFiles.remove(filePath);
 		}
-		else
+
+		if (luaL_loadbuffer(luaState, cast(const char*)text.ptr, text.length, filePath.toStringz()) != LUA_OK)
 		{
-			if (luaL_loadbuffer(luaState, cast(const char*)text.ptr, text.length, filePath.toStringz()) != LUA_OK)
-			{
-				string error = to!(string)(lua_tostring(luaState, -1));
-				lua_pop(luaState, 1);
-				throw new Exception(error);
-			}
+			string error = to!(string)(lua_tostring(luaState, -1));
+			lua_pop(luaState, 1);
+			throw new Exception(error);
 		}
+
 		lua_pushvalue(luaState, -1);// To compensate the value poped by luaL_ref
 		mFiles[filePath] = luaL_ref(luaState, LUA_REGISTRYINDEX);
 	}
@@ -770,7 +771,7 @@ extern(C)
 			if (envUpvalue == null) // No access to env, env table is still on the stack so we need to pop it
 				lua_pop(dmlEngine.luaState, 1);
 			// Execute component code
-			dmlEngine.__execute();
+			dmlEngine.executeFile(path);
 
 			dquick.script.iItemBinding.IItemBinding	iItemBinding = dmlEngine.rootItemBinding!(dquick.script.iItemBinding.IItemBinding)();
 			if (iItemBinding is null || iItemBinding == previousRootItem)
