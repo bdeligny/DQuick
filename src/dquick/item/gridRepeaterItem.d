@@ -342,7 +342,7 @@ unittest
 				spacing = 6
 			}
 		)";
-		dmlEngine.execute(lua, "");
+		dmlEngine.execute(lua, "GridRepeater");
 		assert(dmlEngine.getLuaGlobal!GraphicItem("gridRepeater1").children.length == 3);
 		//assert(cast(DeclarativeItem)dmlEngine.getLuaGlobal!GraphicItem("gridRepeater1").children[0]);
 		assert((cast(GraphicItem)dmlEngine.getLuaGlobal!GraphicItem("gridRepeater1").children[0]).x == 0);
