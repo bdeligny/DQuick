@@ -1611,6 +1611,7 @@ unittest
 	// Check error 31
 	try
 	{
+		dmlEngine.loadFile("", "CheckError31.lua");
 		string lua = q"(
 			ImportComponent("CheckError31.lua")
 			CheckError31()
@@ -1626,6 +1627,7 @@ unittest
 	// Check error 32
 	try
 	{
+		dmlEngine.loadFile("", "CheckError32.lua");
 		string lua = q"(
 			ImportComponent("CheckError32.lua")
 			CheckError32({}, 0)

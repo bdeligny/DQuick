@@ -169,14 +169,6 @@ public:
 		lua_pop(luaState, -1);
 	}
 
-	void	__loadFile(string filePath)
-	{
-		assert(isCreated());
-
-		auto text = cast(string)read(filePath);
-		__load(text, filePath);
-	}
-
 	/// Load lua code as if it was a file without executing it, usefull to create a component without writing it in a real file. Update already instanciated components in case of reload
 	void	loadFile(string text, string filePath)
 	{
@@ -637,6 +629,8 @@ extern(C)
 			DMLEngineCore	dmlEngine = cast(DMLEngineCore)lua_touserdata(L, -1);
 			lua_pop(L, 1);
 
+			dmlEngine.loadFileFromCache(path);
+
 			string	componentName = baseName(stripExtension(path));
 			lua_getglobal(L, componentName.toStringz());
 			if (lua_iscfunction(L, -1) == false)
@@ -697,7 +691,7 @@ extern(C)
 
 			// Get component code
 			string	path = to!(string)(lua_tostring(L, lua_upvalueindex(1)));
-			dmlEngine.__loadFile(path);
+			dmlEngine.loadFileFromCache(path);
 
 			/*lua_pushvalue(dmlEngine.luaState, lua_upvalueindex(1));
 			assert(lua_isfunction(dmlEngine.luaState, -1));*/
