@@ -725,7 +725,7 @@ unittest
 	dmlEngine.addObjectBindingType!(ListView1Component, "ListView1Component");
 	dmlEngine.addObjectBindingType!(ListView1ModelItem, "ListView1ModelItem");
 
-	// Test basic item
+	/+// Test basic item
 	string lua1 = q"(
 		Item {
 			id = "item1"
@@ -734,7 +734,7 @@ unittest
 	dmlEngine.execute(lua1, "Test basic item");
 	assert(dmlEngine.getLuaGlobal!Item("item1") !is null);
 	assert(dmlEngine.rootItemBinding!DeclarativeItem() !is null);
-	assert(dmlEngine.rootItemBinding!DeclarativeItem().id == "item1");
+	assert(dmlEngine.rootItemBinding!DeclarativeItem().id == "item1");+/
 
 	// Test native property
 	string lua2 = q"(

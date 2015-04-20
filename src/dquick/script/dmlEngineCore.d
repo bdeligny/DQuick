@@ -95,12 +95,17 @@ public:
 				}
 			}
 
+			// Function to instanciate item
+			lua_pushstring(luaState, "__createItem");
+			lua_pushcfunction(luaState, cast(lua_CFunction)&createItemLuaBind!(type));
+			lua_settable(luaState, -3);
+
 			// Create metatable
 			lua_newtable(luaState);
 			{
 				// Call metamethod to instanciate type
 				lua_pushstring(luaState, "__call");
-				lua_pushcfunction(luaState, cast(lua_CFunction)&createLuaBind!(type));
+				lua_pushcfunction(luaState, cast(lua_CFunction)&createShallowItemLuaBind!(type));
 				lua_settable(luaState, -3);
 			}
 			lua_setmetatable(luaState, -2);
@@ -319,6 +324,8 @@ protected:
 		beginTransaction();
 		scope(exit) endTransaction();
 
+		mRootRef = -1;
+
 		if (lua_pcall(luaState, paramCount, LUA_MULTRET, 0) != LUA_OK)
 		{
 			string error = to!(string)(lua_tostring(luaState, -1));
@@ -326,9 +333,48 @@ protected:
 			throw new Exception(error);
 		}
 
+		// mRootRef
+		if (mRootRef != -1 && mReentrencyLevel == 1) // Call bindings only after the last execute to avoid errors in bindings due to partial creation
+		{
+			lua_rawgeti(luaState, LUA_REGISTRYINDEX, mRootRef);
+			createItemTreeFromShallowTree();
+			luaL_unref(luaState, LUA_REGISTRYINDEX, mRootRef);
+			mRootRef = -1;
+		}
+
 		auto lastItemBindingCreated = mLastItemBindingCreated;
 		mLastItemBindingCreated = null;
 		return lastItemBindingCreated;
+	}
+
+	// Instanciate the item tree from the shallow item tree
+	void	createItemTreeFromShallowTree()
+	{
+		writeln(getLuaTypeName(luaState, -1));
+
+		// Get self table in the arg table under __self key
+		lua_pushstring(luaState, "__self");
+		lua_gettable(luaState, -2);
+
+
+		writeln(getLuaTypeName(luaState, -1));
+
+		// Get createItemLuaBind for this item from the self table under __createItem key
+		lua_pushstring(luaState, "__createItem");
+		lua_gettable(luaState, -2);
+
+		writeln(getLuaTypeName(luaState, -1));
+
+		lua_CFunction	createItemLuaBind = lua_tocfunction(luaState, -1);
+		lua_pop(luaState, 1);
+
+		// Put self table first then arg table
+		lua_insert(luaState, -2);
+
+		// Call createItemLuaBind
+		createItemLuaBind(luaState);
+
+		lua_pop(luaState, 1);
 	}
 
 	dquick.script.iItemBinding.IItemBinding[]		mItems;
@@ -346,6 +392,7 @@ protected:
 		package int	lvl;
 	int[]		mEnvStack;
 	int[string]	mFiles;
+	int			mRootRef;
 }
 
 extern(C)
@@ -365,8 +412,48 @@ extern(C)
 		}
 	}
 
+	/// Instanciate a shallow item representing the D Item before real instanciation
+	private int	createShallowItemLuaBind(T)(lua_State* L)
+	{
+		try
+		{
+			if (!lua_istable(L, 1))
+				throw new Exception(format("a table was expected as self, got %s, the function was altered", getLuaTypeName(L, 1)));
+			if (!lua_istable(L, 2))
+				throw new Exception(format("a table was expected as argument, got %s", getLuaTypeName(L, 2)));
+			if (lua_gettop(L) > 2)
+				throw new Exception("too many arguments, only one table was expected as argument");
+
+			// Get DMLEngine
+			lua_pushstring(L, "__This");
+			lua_gettable(L, LUA_REGISTRYINDEX);
+			DMLEngineCore	dmlEngine = cast(DMLEngineCore)lua_touserdata(L, -1);
+			lua_pop(L, 1);
+
+			// Put self table in arg table
+			lua_pushstring(L, "__self");
+			lua_pushvalue(L, -3);
+			lua_settable(L, -3);
+
+			// Remove self table
+			lua_remove(L, -2);
+
+			// Make a ref to retrieve root item
+			if (dmlEngine.mRootRef != -1)
+				luaL_unref(L, LUA_REGISTRYINDEX, dmlEngine.mRootRef);
+			dmlEngine.mRootRef = luaL_ref(L, LUA_REGISTRYINDEX);
+
+			return 1;
+		}
+		catch (Throwable e)
+		{
+			luaError(L, e.msg);
+			return 0;
+		}
+	}
+
 	/// Instanciate a D Item
-	private int	createLuaBind(T)(lua_State* L)
+	private int	createItemLuaBind(T)(lua_State* L)
 	{
 		try
 		{
