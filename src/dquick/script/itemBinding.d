@@ -58,6 +58,8 @@ static string	BASE_ITEM_BINDING()
 			}
 		}
 
+		int	currentLine = -1;
+
 		override void	createItemBindingLuaEnv()
 		{
 			// Create new _ENV table with lookup function to handle this and parent

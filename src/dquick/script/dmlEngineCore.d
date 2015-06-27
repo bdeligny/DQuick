@@ -437,6 +437,11 @@ extern(C)
 				dmlEngine.addObjectBinding!T(itemBinding);
 				dmlEngine.mLastItemBindingCreated = itemBinding;
 
+				lua_Debug ar;
+				lua_getstack(L, 0, &ar);
+				lua_getinfo(L, "l", &ar);
+				itemBinding.currentLine = ar.currentline;
+
 				lua_remove(L, 1);
 				(cast(IItemBinding)(itemBinding)).valuesFromLuaTable(L);
 
