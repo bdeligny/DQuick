@@ -59,7 +59,6 @@ public:
 		mInitializedItemCount = 0;
 
 		mLoading = false;
-		mLastShallowItemBindingCreated = -1;
 	}
 
 	void	destroy()
@@ -169,57 +168,13 @@ public:
 
 		auto text = cast(string)read(filePath);
 		__load(text, filePath);
-		lua_pop(luaState, -1);
+		lua_pop(luaState, 1);
 	}
 
 	/// Load lua code as if it was a file without executing it, usefull to create a component without writing it in a real file. Update already instanciated components in case of reload
 	void	loadFile(string text, string filePath)
 	{
 		__load(text, filePath);
-
-		// Execute in loading mode for hot reload
-		mOldShallowItems = mShallowItems;
-		mShallowItems.clear();
-		mLoading = true;
-		scope(exit)	mLoading = false;
-		if (lua_pcall(luaState, 0, LUA_MULTRET, 0) != LUA_OK)
-		{
-			string error = to!(string)(lua_tostring(luaState, -1));
-			lua_pop(luaState, 1);
-			throw new Exception(error);
-		}
-		// Analyze
-		foreach (newShallow; mShallowItems)
-		{
-			// Get the shallow table onto the stack
-			lua_rawgeti(luaState, LUA_REGISTRYINDEX, newShallow);
-
-			// Get the id
-			lua_pushstring(luaState, "id");
-			lua_rawgeti(luaState, -2, -1);
-
-			if (lua_isstring(luaState, -1))
-			{
-				string	id;
-				dquick.script.utils.valueFromLua(luaState, -1, id);
-
-				foreach (oldShallow; mShallowItems)
-				{
-					// Get the shallow table onto the stack
-					lua_rawgeti(luaState, LUA_REGISTRYINDEX, oldShallow);
-
-					// Get the id
-					lua_pushstring(luaState, "id");
-					lua_rawgeti(luaState, -2, -1);
-
-					if (lua_isstring(luaState, -1))
-					{
-						string	id;
-						dquick.script.utils.valueFromLua(luaState, -1, id);
-					}
-				}
-			}
-		}
 	}
 
 	T	rootItemBinding(T)()
@@ -314,6 +269,86 @@ public:
 
 		lua_pushvalue(luaState, -1);// To compensate the value poped by luaL_ref
 		mFiles[filePath] = luaL_ref(luaState, LUA_REGISTRYINDEX);
+
+
+
+
+
+		// Execute in loading mode for hot reload
+		mNewShallowItems.clear();
+		mLoading = true;
+		scope(exit)	mLoading = false;
+		lua_pushvalue(luaState, -1);// To compensate the value poped by lua_pcall
+		if (lua_pcall(luaState, 0, LUA_MULTRET, 0) != LUA_OK)
+		{
+			string error = to!(string)(lua_tostring(luaState, -1));
+			lua_pop(luaState, 1);
+			throw new Exception(error);
+		}
+		// Analyze
+		auto ptr = filePath in mShallowItems;
+		//assert(ptr);
+		if (ptr)
+		{
+			int[]	oldShallowItems = *ptr;
+			foreach (newShallow; mNewShallowItems)
+			{
+				// Get the shallow table onto the stack
+				lua_rawgeti(luaState, LUA_REGISTRYINDEX, newShallow);
+				assert(lua_istable(luaState, -1));
+
+				lua_pushnil(luaState);  /* first key */
+				while (lua_next(luaState, -2) != 0) {
+					/* uses 'key' (at index -2) and 'value' (at index -1) */
+					valueFromLua(luaState);
+
+					/* removes 'value'; keeps 'key' for next iteration */
+					lua_pop(luaState, 1);
+				}
+				lua_pop(L, 1); // Remove param 1 (table)
+
+				// Get the id
+				lua_pushstring(luaState, "id");
+				lua_rawgeti(luaState, -2, -1);
+
+				if (lua_isstring(luaState, -1))
+				{
+					string	newId;
+					dquick.script.utils.valueFromLua(luaState, -1, newId);
+
+					foreach (oldShallow; oldShallowItems)
+					{
+						// Get the shallow table onto the stack
+						lua_rawgeti(luaState, LUA_REGISTRYINDEX, oldShallow);
+						assert(lua_istable(luaState, -1));
+
+						// Get the id
+						lua_pushstring(luaState, "id");
+						lua_rawgeti(luaState, -2, -1);
+
+						if (lua_isstring(luaState, -1))
+						{
+							string	oldId;
+							dquick.script.utils.valueFromLua(luaState, -1, oldId);
+
+							if (oldId == newId) // new shallow is a new version of this old shallow
+							{
+								writefln("reload %s", newId);
+							}
+						}
+
+						lua_pop(luaState, 2); // Pop oldId and oldShallow
+					}
+				}
+
+				lua_pop(luaState, 2); // Pop newId and newShallow 
+			}
+			*ptr = mNewShallowItems;
+		}
+		else
+		{
+			mShallowItems[filePath] = mNewShallowItems;
+		}
 	}
 
 	/// Execute lua code already on the stack. Private API
@@ -396,9 +431,9 @@ protected:
 	int[]		mEnvStack;
 	int[string]	mFiles;
 	bool		mLoading;
-	int			mLastShallowItemBindingCreated;
-	int[]		mOldShallowItems;
-	int[]		mShallowItems;
+	int[][string]	mShallowItems;
+	int[]			mNewShallowItems;
+	//int[][string]	mShallowsToItems;
 }
 
 extern(C)
@@ -439,14 +474,8 @@ extern(C)
 			{
 				lua_remove(L, -2); // Remove the self table and only return the args table
 
-				// Make a ref to retrieve root item
-				if (dmlEngine.mLastShallowItemBindingCreated != -1)
-					luaL_unref(L, LUA_REGISTRYINDEX, dmlEngine.mLastShallowItemBindingCreated);
 				lua_pushvalue(L, -1);// To compensate the value poped by luaL_ref
-				dmlEngine.mLastShallowItemBindingCreated = luaL_ref(L, LUA_REGISTRYINDEX);
-
-				lua_pushvalue(L, -1);// To compensate the value poped by luaL_ref
-				mShallowItems ~= luaL_ref(L, LUA_REGISTRYINDEX);
+				dmlEngine.mNewShallowItems ~= luaL_ref(L, LUA_REGISTRYINDEX);
 			}
 			else
 			{
