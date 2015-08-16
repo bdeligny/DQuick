@@ -57,6 +57,9 @@ public:
 		mEnvStack ~= luaL_ref(luaState, LUA_REGISTRYINDEX);
 
 		mInitializedItemCount = 0;
+
+		mLoading = false;
+		mLastShallowItemBindingCreated = -1;
 	}
 
 	void	destroy()
@@ -173,7 +176,50 @@ public:
 	void	loadFile(string text, string filePath)
 	{
 		__load(text, filePath);
-		lua_pop(luaState, -1);
+
+		// Execute in loading mode for hot reload
+		mOldShallowItems = mShallowItems;
+		mShallowItems.clear();
+		mLoading = true;
+		scope(exit)	mLoading = false;
+		if (lua_pcall(luaState, 0, LUA_MULTRET, 0) != LUA_OK)
+		{
+			string error = to!(string)(lua_tostring(luaState, -1));
+			lua_pop(luaState, 1);
+			throw new Exception(error);
+		}
+		// Analyze
+		foreach (newShallow; mShallowItems)
+		{
+			// Get the shallow table onto the stack
+			lua_rawgeti(luaState, LUA_REGISTRYINDEX, newShallow);
+
+			// Get the id
+			lua_pushstring(luaState, "id");
+			lua_rawgeti(luaState, -2, -1);
+
+			if (lua_isstring(luaState, -1))
+			{
+				string	id;
+				dquick.script.utils.valueFromLua(luaState, -1, id);
+
+				foreach (oldShallow; mShallowItems)
+				{
+					// Get the shallow table onto the stack
+					lua_rawgeti(luaState, LUA_REGISTRYINDEX, oldShallow);
+
+					// Get the id
+					lua_pushstring(luaState, "id");
+					lua_rawgeti(luaState, -2, -1);
+
+					if (lua_isstring(luaState, -1))
+					{
+						string	id;
+						dquick.script.utils.valueFromLua(luaState, -1, id);
+					}
+				}
+			}
+		}
 	}
 
 	T	rootItemBinding(T)()
@@ -294,6 +340,9 @@ public:
 		luaL_unref(luaState, LUA_REGISTRYINDEX, mEnvStack[mEnvStack.length - 1]);
 		mEnvStack.length--;
 	}
+
+	bool	loading() { return mLoading; }
+
 protected:
 	/// Load a real file on the lua stack. Try to load from cache, use loadFile to really reload the file from disk
 	void	loadFileFromCache(string filePath)
@@ -346,6 +395,10 @@ protected:
 		package int	lvl;
 	int[]		mEnvStack;
 	int[string]	mFiles;
+	bool		mLoading;
+	int			mLastShallowItemBindingCreated;
+	int[]		mOldShallowItems;
+	int[]		mShallowItems;
 }
 
 extern(C)
@@ -382,35 +435,51 @@ extern(C)
 			DMLEngineCore	dmlEngine = cast(DMLEngineCore)lua_touserdata(L, -1);
 			lua_pop(L, 1);
 
-			T	itemBinding = new T();
-			dmlEngine.addObjectBinding!T(itemBinding);
-			dmlEngine.mLastItemBindingCreated = itemBinding;
-
-			lua_remove(L, 1);
-			(cast(IItemBinding)(itemBinding)).valuesFromLuaTable(L);
-
-			dquick.script.utils.valueToLua!T(L, itemBinding);
-
-			// Set global from id
-			if (itemBinding.id != "")
+			if (dmlEngine.loading) // Only store and return the args table for hot-reloading
 			{
-				// Get _ENV
-				lua_rawgeti(L, LUA_REGISTRYINDEX, dmlEngine.currentLuaEnv);
+				lua_remove(L, -2); // Remove the self table and only return the args table
 
-				lua_pushstring(L, itemBinding.id.toStringz());
+				// Make a ref to retrieve root item
+				if (dmlEngine.mLastShallowItemBindingCreated != -1)
+					luaL_unref(L, LUA_REGISTRYINDEX, dmlEngine.mLastShallowItemBindingCreated);
+				lua_pushvalue(L, -1);// To compensate the value poped by luaL_ref
+				dmlEngine.mLastShallowItemBindingCreated = luaL_ref(L, LUA_REGISTRYINDEX);
 
-				{ // Check for id conflict
-					lua_pushvalue(L, -1);
-					lua_rawget(L, -3); // Raw get without calling index metamethod to not get parent components values
-					if (lua_isnil(L, -1) == false)
-						throw new Exception(format("an item with id \"%s\" already exist in that component", itemBinding.id));
+				lua_pushvalue(L, -1);// To compensate the value poped by luaL_ref
+				mShallowItems ~= luaL_ref(L, LUA_REGISTRYINDEX);
+			}
+			else
+			{
+				T	itemBinding = new T();
+				dmlEngine.addObjectBinding!T(itemBinding);
+				dmlEngine.mLastItemBindingCreated = itemBinding;
+
+				lua_remove(L, 1);
+				(cast(IItemBinding)(itemBinding)).valuesFromLuaTable(L);
+
+				dquick.script.utils.valueToLua!T(L, itemBinding);
+
+				// Set global from id
+				if (itemBinding.id != "")
+				{
+					// Get _ENV
+					lua_rawgeti(L, LUA_REGISTRYINDEX, dmlEngine.currentLuaEnv);
+
+					lua_pushstring(L, itemBinding.id.toStringz());
+
+					{ // Check for id conflict
+						lua_pushvalue(L, -1);
+						lua_rawget(L, -3); // Raw get without calling index metamethod to not get parent components values
+						if (lua_isnil(L, -1) == false)
+							throw new Exception(format("an item with id \"%s\" already exist in that component", itemBinding.id));
+						lua_pop(L, 1);
+					}
+
+					lua_pushvalue(L, -3);
+
+					lua_settable(L, -3);
 					lua_pop(L, 1);
 				}
-
-				lua_pushvalue(L, -3);
-
-				lua_settable(L, -3);
-				lua_pop(L, 1);
 			}
 
 			return 1;

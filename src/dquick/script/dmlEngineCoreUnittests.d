@@ -2707,32 +2707,31 @@ unittest
 		assert((cast(ListView1Component)(listView104.children[2])).name == "item142_2View");
 	}
 
-	/*// Simulate a simple reloading
+	// Simulate a simple reloading
 	{
-		string lua1 = q"(
+		string lua = q"(
 			Item {
-				id = "reloadingItem1"
+				id = "reloadingItem1",
 				nativeProperty = 100,
 				virtualProperty = 200,
 				nativeTotalProperty = 300
 			}
 		)";
-		dmlEngine.execute(lua1, "");
-		string lua2 = q"(
+		dmlEngine.execute(lua, "Simulate a simple reloading");
+		lua = q"(
 			Item {
-				id = "reloadingItem1"
+				id = "reloadingItem1",
 				nativeProperty = 400,
 				virtualProperty = 200,
 				nativeTotalProperty = 300
 			}
 		)";
-		dmlEngine.execute(lua2, "");
+		dmlEngine.loadFile(lua, "Simulate a simple reloading");
 		assert(dmlEngine.getLuaGlobal!Item("reloadingItem1").nativeProperty == 400);
-		assert(dmlEngine.getLuaGlobal!Item("reloadingItem1").virtualProperty == 200);
 		assert(dmlEngine.getLuaGlobal!Item("reloadingItem1").nativeTotalProperty == 300);
-	}*/
+	}
 
-	// Simulate a component reloading
+	/+// Simulate a component reloading
 	{
 		string	component = q"(
 			Item {
@@ -2769,7 +2768,7 @@ unittest
 
 		assert(dmlEngine.getLuaGlobal!Item("reloadingItem3").nativeTotalProperty == 620);
 		assert(dmlEngine.getLuaGlobal!Item("reloadingItem3").nativeProperty == 710);
-	}
+	}+/
 
 	}
 	catch (Throwable e)
