@@ -93,6 +93,51 @@ string	getLuaTypeName(lua_State* L, int index)
 	}
 }
 
+string	luaDump(lua_State* L, int index)
+{
+	string result;
+	int t = lua_type(L, index);
+	switch (t)
+	{
+		case LUA_TSTRING:  /* strings */
+			result = format("\"%s\"", to!(string)(lua_tostring(L, index)));
+			break;
+		case LUA_TBOOLEAN:  /* booleans */
+			result = format("%s", lua_toboolean(L, index) ? "true" : "false");
+			break;
+		case LUA_TNUMBER:  /* numbers */
+			result = format("%g", lua_tonumber(L, index));
+			break;
+		case LUA_TTABLE:  /* tables */
+			result ~= format("{\n");
+			lua_pushnil(L);  /* first key */
+			while (lua_next(L, index - 1) != 0) {
+				/* uses 'key' (at index -2) and 'value' (at index -1) */
+				result ~= shiftRight(luaDump(L, -2) ~ " = " ~ luaDump(L, -1) ~ "\n", "\t", 1);
+
+				/* removes 'value'; keeps 'key' for next iteration */
+				lua_pop(L, 1);
+			}
+			result ~= format("}\n");
+			break;
+		default:  /* other values */
+			writefln("%s", to!(string)(lua_typename(L, t)));
+			break;
+	}
+	return result;
+}
+
+string	luaDumpStack(lua_State* L)
+{
+	string result;
+    int top = lua_gettop(L);
+	for (int i = -1; i >= -top; i--)
+    {
+		result ~= luaDump(L, i) ~ "\n";
+	}
+	return result;
+}
+
 enum LuaUserDataType : byte
 {
 	Item,

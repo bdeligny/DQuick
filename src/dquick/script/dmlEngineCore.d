@@ -297,15 +297,7 @@ public:
 				lua_rawgeti(luaState, LUA_REGISTRYINDEX, newShallow);
 				assert(lua_istable(luaState, -1));
 
-				lua_pushnil(luaState);  /* first key */
-				while (lua_next(luaState, -2) != 0) {
-					/* uses 'key' (at index -2) and 'value' (at index -1) */
-					valueFromLua(luaState);
-
-					/* removes 'value'; keeps 'key' for next iteration */
-					lua_pop(luaState, 1);
-				}
-				lua_pop(L, 1); // Remove param 1 (table)
+				writeln(luaDumpStack(luaState));
 
 				// Get the id
 				lua_pushstring(luaState, "id");
