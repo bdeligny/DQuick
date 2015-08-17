@@ -725,7 +725,7 @@ unittest
 	dmlEngine.addObjectBindingType!(ListView1Component, "ListView1Component");
 	dmlEngine.addObjectBindingType!(ListView1ModelItem, "ListView1ModelItem");
 
-	/+// Test basic item
+	// Test basic item
 	string lua1 = q"(
 		Item {
 			id = "item1"
@@ -2705,7 +2705,7 @@ unittest
 		assert((cast(ListView1Component)(listView104.children[0])).name == "item140_2View");
 		assert((cast(ListView1Component)(listView104.children[1])).name == "item141_2View");
 		assert((cast(ListView1Component)(listView104.children[2])).name == "item142_2View");
-	}+/
+	}
 
 	// Simulate a simple reloading
 	{

@@ -113,15 +113,15 @@ string	luaDump(lua_State* L, int index)
 			lua_pushnil(L);  /* first key */
 			while (lua_next(L, index - 1) != 0) {
 				/* uses 'key' (at index -2) and 'value' (at index -1) */
-				result ~= shiftRight(luaDump(L, -2) ~ " = " ~ luaDump(L, -1) ~ "\n", "\t", 1);
+				result ~= shiftRight(luaDump(L, -2) ~ " = " ~ luaDump(L, -1) ~ "\n", " ", 4);
 
 				/* removes 'value'; keeps 'key' for next iteration */
 				lua_pop(L, 1);
 			}
-			result ~= format("}\n");
+			result ~= format("}");
 			break;
 		default:  /* other values */
-			writefln("%s", to!(string)(lua_typename(L, t)));
+			result ~= format("%s", to!(string)(lua_typename(L, t)));
 			break;
 	}
 	return result;
@@ -131,9 +131,9 @@ string	luaDumpStack(lua_State* L)
 {
 	string result;
     int top = lua_gettop(L);
-	for (int i = -1; i >= -top; i--)
+	for (int i = 1; i <= top; i++)
     {
-		result ~= luaDump(L, i) ~ "\n";
+		result ~= luaDump(L, -(top - i + 1)) ~ "\n";
 	}
 	return result;
 }

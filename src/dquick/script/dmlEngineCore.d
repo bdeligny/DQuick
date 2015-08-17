@@ -17,6 +17,7 @@ import std.traits;
 import std.typetuple;
 import std.c.string;
 import std.path;
+import core.exception;
 
 class DMLEngineCore
 {
@@ -58,7 +59,7 @@ public:
 
 		mInitializedItemCount = 0;
 
-		mLoading = false;
+		mReloading = false;
 	}
 
 	void	destroy()
@@ -169,6 +170,7 @@ public:
 		auto text = cast(string)read(filePath);
 		__load(text, filePath);
 		lua_pop(luaState, 1);
+		mLoadedFilePath.clear();
 	}
 
 	/// Load lua code as if it was a file without executing it, usefull to create a component without writing it in a real file. Update already instanciated components in case of reload
@@ -270,14 +272,14 @@ public:
 		lua_pushvalue(luaState, -1);// To compensate the value poped by luaL_ref
 		mFiles[filePath] = luaL_ref(luaState, LUA_REGISTRYINDEX);
 
+		mLoadedFilePath = filePath;
 
 
 
-
-		// Execute in loading mode for hot reload
-		mNewShallowItems.clear();
-		mLoading = true;
-		scope(exit)	mLoading = false;
+		// Execute in reloading mode for hot reload
+		assert(mNewShallowItems.length == 0);
+		mReloading = true;
+		scope(exit)	mReloading = false;
 		lua_pushvalue(luaState, -1);// To compensate the value poped by lua_pcall
 		if (lua_pcall(luaState, 0, LUA_MULTRET, 0) != LUA_OK)
 		{
@@ -287,7 +289,6 @@ public:
 		}
 		// Analyze
 		auto ptr = filePath in mShallowItems;
-		//assert(ptr);
 		if (ptr)
 		{
 			int[]	oldShallowItems = *ptr;
@@ -297,11 +298,9 @@ public:
 				lua_rawgeti(luaState, LUA_REGISTRYINDEX, newShallow);
 				assert(lua_istable(luaState, -1));
 
-				writeln(luaDumpStack(luaState));
-
 				// Get the id
 				lua_pushstring(luaState, "id");
-				lua_rawgeti(luaState, -2, -1);
+				lua_rawget(luaState, -2);
 
 				if (lua_isstring(luaState, -1))
 				{
@@ -316,7 +315,7 @@ public:
 
 						// Get the id
 						lua_pushstring(luaState, "id");
-						lua_rawgeti(luaState, -2, -1);
+						lua_rawget(luaState, -2);
 
 						if (lua_isstring(luaState, -1))
 						{
@@ -326,6 +325,10 @@ public:
 							if (oldId == newId) // new shallow is a new version of this old shallow
 							{
 								writefln("reload %s", newId);
+								foreach (item; mItems)
+								{
+									//item.replaceShallow(oldShallow, newShallow);
+								}
 							}
 						}
 
@@ -336,10 +339,12 @@ public:
 				lua_pop(luaState, 2); // Pop newId and newShallow 
 			}
 			*ptr = mNewShallowItems;
+			mNewShallowItems.clear();
 		}
 		else
 		{
 			mShallowItems[filePath] = mNewShallowItems;
+			mNewShallowItems.clear();
 		}
 	}
 
@@ -347,6 +352,7 @@ public:
 	void	__execute()
 	{
 		assert(isCreated());
+		assert(mNewShallowItems.length == 0);
 
 		// Save _ENV
 		const char*	upvalue = lua_getupvalue(luaState, -1, 1);
@@ -362,13 +368,29 @@ public:
 		static if (showDebug)
 			writeln("execute: CREATE ==================================================================================================");
 
+		assert(mLoadedFilePath.length != 0);
+		string filePath = mLoadedFilePath;
+		mLoadedFilePath.clear();
+
 		mRootItemBinding = luaPCall(0);
 
 		luaL_unref(luaState, LUA_REGISTRYINDEX, mEnvStack[mEnvStack.length - 1]);
 		mEnvStack.length--;
+
+		auto ptr = filePath in mShallowItems;
+		if (ptr)
+		{
+			*ptr = mNewShallowItems;
+			mNewShallowItems.clear();
+		}
+		else
+		{
+			mShallowItems[filePath] = mNewShallowItems;
+			mNewShallowItems.clear();
+		}
 	}
 
-	bool	loading() { return mLoading; }
+	bool	reloading() { return mReloading; }
 
 protected:
 	/// Load a real file on the lua stack. Try to load from cache, use loadFile to really reload the file from disk
@@ -422,10 +444,11 @@ protected:
 		package int	lvl;
 	int[]		mEnvStack;
 	int[string]	mFiles;
-	bool		mLoading;
+	bool		mReloading;
 	int[][string]	mShallowItems;
 	int[]			mNewShallowItems;
 	//int[][string]	mShallowsToItems;
+	string			mLoadedFilePath;
 }
 
 extern(C)
@@ -462,12 +485,13 @@ extern(C)
 			DMLEngineCore	dmlEngine = cast(DMLEngineCore)lua_touserdata(L, -1);
 			lua_pop(L, 1);
 
-			if (dmlEngine.loading) // Only store and return the args table for hot-reloading
+			// Save the shallow for reloading
+			lua_pushvalue(L, -1);// To compensate the value poped by luaL_ref
+			dmlEngine.mNewShallowItems ~= luaL_ref(L, LUA_REGISTRYINDEX);
+
+			if (dmlEngine.reloading) // Only store and return the args table for hot-reloading
 			{
 				lua_remove(L, -2); // Remove the self table and only return the args table
-
-				lua_pushvalue(L, -1);// To compensate the value poped by luaL_ref
-				dmlEngine.mNewShallowItems ~= luaL_ref(L, LUA_REGISTRYINDEX);
 			}
 			else
 			{
@@ -504,6 +528,11 @@ extern(C)
 			}
 
 			return 1;
+		}
+		catch (AssertError e)
+		{
+			luaError(L, format("%s(%d): %s", e.file, e.line, e.msg));
+			return 0;
 		}
 		catch (Throwable e)
 		{
