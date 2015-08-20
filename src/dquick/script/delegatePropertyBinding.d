@@ -78,7 +78,7 @@ class DelegatePropertyBinding(ValueType, ItemType, string PropertyName) : Native
 						}
 					}
 				}
-				itemBinding.dmlEngine.luaPCall(params.length);
+				itemBinding.dmlEngine.__luaPCall(params.length);
 
 				if (lua_gettop(luaState) - top != 1)
 					throw new Exception(format("too few or too many return values on delegate %s.%s, got %d, expected 1", itemBinding.id, propertyName, lua_gettop(luaState) - top));

@@ -127,7 +127,7 @@ class PropertyBinding
 
 				int	top = lua_gettop(itemBinding.dmlEngine.luaState);
 				lua_rawgeti(itemBinding.dmlEngine.luaState, LUA_REGISTRYINDEX, luaReference);
-				itemBinding.dmlEngine.luaPCall(0);
+				itemBinding.dmlEngine.__luaPCall(0);
 
 				static if (dquick.script.dmlEngine.DMLEngine.showDebug)
 				{
@@ -175,7 +175,7 @@ class PropertyBinding
 			if (slotLuaReference != -1)
 			{
 				lua_rawgeti(itemBinding.dmlEngine.luaState, LUA_REGISTRYINDEX, slotLuaReference);
-				itemBinding.dmlEngine.luaPCall(0);
+				itemBinding.dmlEngine.__luaPCall(0);
 			}
 
 			auto dependentsCopy = dependents.dup;

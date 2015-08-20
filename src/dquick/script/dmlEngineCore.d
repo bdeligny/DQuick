@@ -152,14 +152,18 @@ public:
 		assert(isCreated());
 
 		loadFileFromCache(filePath);
+		__pushLuaEnv();
 		__execute();
+		__popLuaEnv();
 	}
 
 	/// Load lua code as if it was a file and executing it, usefull to execute lua code without writing it in a real file
 	void	execute(string text, string filePath)
 	{
 		__load(text, filePath);
+		__pushLuaEnv();
 		__execute();
+		__popLuaEnv();
 	}
 
 	/// Load a real file, update already instanciated components
@@ -355,11 +359,8 @@ public:
 		}
 	}
 
-	/// Execute lua code already on the stack. Private API
-	void	__execute()
+	void	__pushLuaEnv()
 	{
-		scope(exit) mExecutionStack.length--;
-
 		assert(isCreated());
 
 		// Save _ENV
@@ -372,14 +373,25 @@ public:
 			throw new Exception("no _ENV upvalue");
 		}
 		mEnvStack ~= luaL_ref(luaState, LUA_REGISTRYINDEX);
+	}
+
+	void	__popLuaEnv()
+	{
+		luaL_unref(luaState, LUA_REGISTRYINDEX, mEnvStack[mEnvStack.length - 1]);
+		mEnvStack.length--;
+	}
+
+	/// Execute lua code already on the stack. Private API
+	void	__execute()
+	{
+		scope(exit) mExecutionStack.length--;
+
+		assert(isCreated());
 
 		static if (showDebug)
 			writeln("execute: CREATE ==================================================================================================");
 
-		mRootItemBinding = luaPCall(0);
-
-		luaL_unref(luaState, LUA_REGISTRYINDEX, mEnvStack[mEnvStack.length - 1]);
-		mEnvStack.length--;
+		mRootItemBinding = __luaPCall(0);
 
 		auto ptr = currentExecution.loadedFilePath in mShallowItems;
 		if (ptr)
@@ -388,7 +400,7 @@ public:
 			mShallowItems[currentExecution.loadedFilePath] = currentExecution.newShallowItems;
 	}
 
-	dquick.script.iItemBinding.IItemBinding		luaPCall(int paramCount)
+	dquick.script.iItemBinding.IItemBinding		__luaPCall(int paramCount)
 	{
 		assert(isCreated());
 
@@ -425,6 +437,8 @@ protected:
 		if (luaRef != null)
 		{
 			lua_rawgeti(luaState, LUA_REGISTRYINDEX, *luaRef);
+			mExecutionStack.length++;
+			currentExecution.loadedFilePath = filePath;
 		}
 		else
 		{
@@ -848,7 +862,7 @@ extern(C)
 					end
 				)";
 				dmlEngine.__load(lua, "ComponentEnvChaining");
-				dmlEngine.luaPCall(0);
+				dmlEngine.__execute();
 
 				// Get component code
 				string	path = to!(string)(lua_tostring(L, lua_upvalueindex(1)));
@@ -883,7 +897,9 @@ extern(C)
 				if (envUpvalue == null) // No access to env, env table is still on the stack so we need to pop it
 					lua_pop(dmlEngine.luaState, 1);
 				// Execute component code
+				dmlEngine.__pushLuaEnv();
 				dmlEngine.__execute();
+				dmlEngine.__popLuaEnv();
 
 				dquick.script.iItemBinding.IItemBinding	iItemBinding = dmlEngine.rootItemBinding!(dquick.script.iItemBinding.IItemBinding)();
 				if (iItemBinding is null || iItemBinding == previousRootItem)

@@ -98,7 +98,7 @@ class NativePropertyBinding(ValueType, ItemType, string PropertyName) : Property
 				{
 					int	top = lua_gettop(itemBinding.dmlEngine.luaState);
 					lua_rawgeti(itemBinding.dmlEngine.luaState, LUA_REGISTRYINDEX, luaReference);
-					itemBinding.dmlEngine.luaPCall(0);
+					itemBinding.dmlEngine.__luaPCall(0);
 				}
 
 				static if (dquick.script.dmlEngine.DMLEngine.showDebug)
