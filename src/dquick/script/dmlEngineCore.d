@@ -169,14 +169,18 @@ public:
 
 		auto text = cast(string)read(filePath);
 		__load(text, filePath);
+		__hotReload();
 		lua_pop(luaState, 1);
-		mLoadedFilePath.clear();
+		mExecutionStack.length--;
 	}
 
 	/// Load lua code as if it was a file without executing it, usefull to create a component without writing it in a real file. Update already instanciated components in case of reload
 	void	loadFile(string text, string filePath)
 	{
 		__load(text, filePath);
+		__hotReload();
+		lua_pop(luaState, 1);
+		mExecutionStack.length--;
 	}
 
 	T	rootItemBinding(T)()
@@ -272,14 +276,17 @@ public:
 		lua_pushvalue(luaState, -1);// To compensate the value poped by luaL_ref
 		mFiles[filePath] = luaL_ref(luaState, LUA_REGISTRYINDEX);
 
-		mLoadedFilePath = filePath;
+		mExecutionStack.length++;
+		currentExecution.loadedFilePath = filePath;
+	}
 
-
-
+	/// Analyze the previously reloaded lua code and do the hot-reload of items. Private API
+	void	__hotReload()
+	{
 		// Execute in reloading mode for hot reload
-		assert(mNewShallowItems.length == 0);
+		bool	reloading = mReloading;
 		mReloading = true;
-		scope(exit)	mReloading = false;
+		scope(exit)	mReloading = reloading;
 		lua_pushvalue(luaState, -1);// To compensate the value poped by lua_pcall
 		if (lua_pcall(luaState, 0, LUA_MULTRET, 0) != LUA_OK)
 		{
@@ -288,11 +295,11 @@ public:
 			throw new Exception(error);
 		}
 		// Analyze
-		auto ptr = filePath in mShallowItems;
+		auto ptr = currentExecution.loadedFilePath in mShallowItems;
 		if (ptr)
 		{
 			int[]	oldShallowItems = *ptr;
-			foreach (newShallow; mNewShallowItems)
+			foreach (newShallow; currentExecution.newShallowItems)
 			{
 				// Get the shallow table onto the stack
 				lua_rawgeti(luaState, LUA_REGISTRYINDEX, newShallow);
@@ -338,21 +345,22 @@ public:
 
 				lua_pop(luaState, 2); // Pop newId and newShallow 
 			}
-			*ptr = mNewShallowItems;
-			mNewShallowItems.clear();
+			*ptr = currentExecution.newShallowItems;
+			currentExecution.newShallowItems.clear();
 		}
 		else
 		{
-			mShallowItems[filePath] = mNewShallowItems;
-			mNewShallowItems.clear();
+			mShallowItems[currentExecution.loadedFilePath] = currentExecution.newShallowItems;
+			currentExecution.newShallowItems.clear();
 		}
 	}
 
 	/// Execute lua code already on the stack. Private API
 	void	__execute()
 	{
+		scope(exit) mExecutionStack.length--;
+
 		assert(isCreated());
-		assert(mNewShallowItems.length == 0);
 
 		// Save _ENV
 		const char*	upvalue = lua_getupvalue(luaState, -1, 1);
@@ -368,29 +376,44 @@ public:
 		static if (showDebug)
 			writeln("execute: CREATE ==================================================================================================");
 
-		assert(mLoadedFilePath.length != 0);
-		string filePath = mLoadedFilePath;
-		mLoadedFilePath.clear();
-
 		mRootItemBinding = luaPCall(0);
 
 		luaL_unref(luaState, LUA_REGISTRYINDEX, mEnvStack[mEnvStack.length - 1]);
 		mEnvStack.length--;
 
-		auto ptr = filePath in mShallowItems;
+		auto ptr = currentExecution.loadedFilePath in mShallowItems;
 		if (ptr)
-		{
-			*ptr = mNewShallowItems;
-			mNewShallowItems.clear();
-		}
+			*ptr = currentExecution.newShallowItems;
 		else
+			mShallowItems[currentExecution.loadedFilePath] = currentExecution.newShallowItems;
+	}
+
+	dquick.script.iItemBinding.IItemBinding		luaPCall(int paramCount)
+	{
+		assert(isCreated());
+
+		beginTransaction();
+		scope(exit) endTransaction();
+
+		if (lua_pcall(luaState, paramCount, LUA_MULTRET, 0) != LUA_OK)
 		{
-			mShallowItems[filePath] = mNewShallowItems;
-			mNewShallowItems.clear();
+			string error = to!(string)(lua_tostring(luaState, -1));
+			lua_pop(luaState, 1);
+			throw new Exception(error);
 		}
+
+		auto lastItemBindingCreated = mLastItemBindingCreated;
+		mLastItemBindingCreated = null;
+		return lastItemBindingCreated;
 	}
 
 	bool	reloading() { return mReloading; }
+
+	ref Execution		currentExecution()
+	{
+		assert(mExecutionStack.length > 0);
+		return mExecutionStack[mExecutionStack.length - 1];
+	}
 
 protected:
 	/// Load a real file on the lua stack. Try to load from cache, use loadFile to really reload the file from disk
@@ -410,25 +433,6 @@ protected:
 		}
 	}
 
-	package dquick.script.iItemBinding.IItemBinding		luaPCall(int paramCount)
-	{
-		assert(isCreated());
-
-		beginTransaction();
-		scope(exit) endTransaction();
-
-		if (lua_pcall(luaState, paramCount, LUA_MULTRET, 0) != LUA_OK)
-		{
-			string error = to!(string)(lua_tostring(luaState, -1));
-			lua_pop(luaState, 1);
-			throw new Exception(error);
-		}
-
-		auto lastItemBindingCreated = mLastItemBindingCreated;
-		mLastItemBindingCreated = null;
-		return lastItemBindingCreated;
-	}
-
 	dquick.script.iItemBinding.IItemBinding[]		mItems;
 	int												mInitializedItemCount;
 	dquick.script.iItemBinding.IItemBinding			mLastItemBindingCreated;
@@ -446,9 +450,13 @@ protected:
 	int[string]	mFiles;
 	bool		mReloading;
 	int[][string]	mShallowItems;
-	int[]			mNewShallowItems;
 	//int[][string]	mShallowsToItems;
-	string			mLoadedFilePath;
+	struct	Execution
+	{
+		string	loadedFilePath;
+		int[]	newShallowItems;
+	}
+	Execution[]	mExecutionStack;
 }
 
 extern(C)
@@ -487,7 +495,7 @@ extern(C)
 
 			// Save the shallow for reloading
 			lua_pushvalue(L, -1);// To compensate the value poped by luaL_ref
-			dmlEngine.mNewShallowItems ~= luaL_ref(L, LUA_REGISTRYINDEX);
+			dmlEngine.currentExecution.newShallowItems ~= luaL_ref(L, LUA_REGISTRYINDEX);
 
 			if (dmlEngine.reloading) // Only store and return the args table for hot-reloading
 			{
@@ -604,6 +612,11 @@ extern(C)
 
 			return 1;
 		}
+		catch (AssertError e)
+		{
+			luaError(L, format("%s(%d): %s", e.file, e.line, e.msg));
+			return 0;
+		}
 		catch (Throwable e)
 		{
 			luaError(L, e.msg);
@@ -661,6 +674,11 @@ extern(C)
 
 			throw new Exception(format("property \"%s\" doesn't exist on object \"%s\"", propertyId, itemBinding.id));
 		}
+		catch (AssertError e)
+		{
+			luaError(L, format("%s(%d): %s", e.file, e.line, e.msg));
+			return 0;
+		}
 		catch (Throwable e)
 		{
 			luaError(L, e.msg);
@@ -676,6 +694,11 @@ extern(C)
 			static assert(__traits(isStaticFunction, func), "func must be a function");
 
 			return luaCallD!(func)(L, 1);
+		}
+		catch (AssertError e)
+		{
+			luaError(L, format("%s(%d): %s", e.file, e.line, e.msg));
+			return 0;
 		}
 		catch (Throwable e)
 		{
@@ -708,6 +731,11 @@ extern(C)
 			assert(itemBinding !is null);
 
 			return luaCallThisD!(methodName, T)(itemBinding, L, 1);
+		}
+		catch (AssertError e)
+		{
+			luaError(L, format("%s(%d): %s", e.file, e.line, e.msg));
+			return 0;
 		}
 		catch (Throwable e)
 		{
@@ -772,6 +800,11 @@ extern(C)
 
 			return 0;
 		}
+		catch (AssertError e)
+		{
+			luaError(L, format("%s(%d): %s", e.file, e.line, e.msg));
+			return 0;
+		}
 		catch (Throwable e)
 		{
 			luaError(L, e.msg);
@@ -794,94 +827,109 @@ extern(C)
 			DMLEngineCore	dmlEngine = cast(DMLEngineCore)lua_touserdata(L, -1);
 			lua_pop(L, 1);
 
-			// Load env chaining __index function
-			string	lua = q"(
-				__env_chaining_index = function (_, n)
-				    local localRawGet = rawget(_, n)
-					if localRawGet == nil then
-						return _ENV[n]
-					else
-						return localRawGet
-					end
-				end
-			)";
-			dmlEngine.__load(lua, "ComponentEnvChaining");
-			dmlEngine.__execute();
+			// Save the shallow for reloading
+			lua_pushvalue(L, -1);// To compensate the value poped by luaL_ref
+			dmlEngine.currentExecution.newShallowItems ~= luaL_ref(L, LUA_REGISTRYINDEX);
 
-			// Get component code
-			string	path = to!(string)(lua_tostring(L, lua_upvalueindex(1)));
-			dmlEngine.loadFileFromCache(path);
-
-			/*lua_pushvalue(dmlEngine.luaState, lua_upvalueindex(1));
-			assert(lua_isfunction(dmlEngine.luaState, -1));*/
-
-			// Create new _ENV table
-			lua_newtable(dmlEngine.luaState);
-			// Create new _ENV's metatable
-			lua_newtable(dmlEngine.luaState);
+			if (dmlEngine.reloading) // Only store and return the args table for hot-reloading
 			{
-				// __index metamethod to chain lookup to the parent env
-				lua_pushstring(dmlEngine.luaState, "__index");
-				lua_getglobal(dmlEngine.luaState, "__env_chaining_index");
+			}
+			else
+			{
+				// Load env chaining __index function
+				string	lua = q"(
+					__env_chaining_index = function (_, n)
+						local localRawGet = rawget(_, n)
+						if localRawGet == nil then
+							return _ENV[n]
+						else
+							return localRawGet
+						end
+					end
+				)";
+				dmlEngine.__load(lua, "ComponentEnvChaining");
+				dmlEngine.luaPCall(0);
 
-				// Put component env
-				lua_rawgeti(dmlEngine.luaState, LUA_REGISTRYINDEX, dmlEngine.currentLuaEnv);
+				// Get component code
+				string	path = to!(string)(lua_tostring(L, lua_upvalueindex(1)));
+				dmlEngine.loadFileFromCache(path);
+
+				/*lua_pushvalue(dmlEngine.luaState, lua_upvalueindex(1));
+				assert(lua_isfunction(dmlEngine.luaState, -1));*/
+
+				// Create new _ENV table
+				lua_newtable(dmlEngine.luaState);
+				// Create new _ENV's metatable
+				lua_newtable(dmlEngine.luaState);
+				{
+					// __index metamethod to chain lookup to the parent env
+					lua_pushstring(dmlEngine.luaState, "__index");
+					lua_getglobal(dmlEngine.luaState, "__env_chaining_index");
+
+					// Put component env
+					lua_rawgeti(dmlEngine.luaState, LUA_REGISTRYINDEX, dmlEngine.currentLuaEnv);
+					const char*	envUpvalue = lua_setupvalue(dmlEngine.luaState, -2, 1);
+					if (envUpvalue == null) // No access to env, env table is still on the stack so we need to pop it
+						lua_pop(dmlEngine.luaState, 1);
+
+					lua_settable(dmlEngine.luaState, -3);
+				}
+				lua_setmetatable(dmlEngine.luaState, -2);
+
+				dquick.script.iItemBinding.IItemBinding	previousRootItem = dmlEngine.rootItemBinding!(dquick.script.iItemBinding.IItemBinding)();
+
+				// Set table to _ENV upvalue
 				const char*	envUpvalue = lua_setupvalue(dmlEngine.luaState, -2, 1);
 				if (envUpvalue == null) // No access to env, env table is still on the stack so we need to pop it
 					lua_pop(dmlEngine.luaState, 1);
+				// Execute component code
+				dmlEngine.__execute();
 
-				lua_settable(dmlEngine.luaState, -3);
-			}
-			lua_setmetatable(dmlEngine.luaState, -2);
-
-			dquick.script.iItemBinding.IItemBinding	previousRootItem = dmlEngine.rootItemBinding!(dquick.script.iItemBinding.IItemBinding)();
-
-			// Set table to _ENV upvalue
-			const char*	envUpvalue = lua_setupvalue(dmlEngine.luaState, -2, 1);
-			if (envUpvalue == null) // No access to env, env table is still on the stack so we need to pop it
-				lua_pop(dmlEngine.luaState, 1);
-			// Execute component code
-			dmlEngine.__execute();
-
-			dquick.script.iItemBinding.IItemBinding	iItemBinding = dmlEngine.rootItemBinding!(dquick.script.iItemBinding.IItemBinding)();
-			if (iItemBinding is null || iItemBinding == previousRootItem)
-			{
-				string	componentName = baseName(stripExtension(path));
-				throw new Exception(format("\"%s\" component has no root item", componentName));
-			}
-
-			string	componentId;
-			lua_pushstring(L, "id");
-			lua_gettable(L, -2);
-			if (lua_isnil(L, -1) == false)
-				componentId = to!(string)(lua_tostring(L, -1));
-			lua_pop(L, 1);
-
-			iItemBinding.valuesFromLuaTable(L);
-			iItemBinding.pushToLua(L);
-
-			// Set global from id
-			if (componentId != "")
-			{
-				// Get _ENV
-				lua_rawgeti(L, LUA_REGISTRYINDEX, dmlEngine.currentLuaEnv);
-				lua_pushstring(L, componentId.toStringz());
-
-				{ // Check for id conflict
-					lua_pushvalue(L, -1);
-					lua_rawget(L, -3); // Raw get without calling index metamethod to not get parent components values
-					if (lua_isnil(L, -1) == false)
-						throw new Exception(format("an item with id \"%s\" already exist in that component", componentId));
-					lua_pop(L, 1);
+				dquick.script.iItemBinding.IItemBinding	iItemBinding = dmlEngine.rootItemBinding!(dquick.script.iItemBinding.IItemBinding)();
+				if (iItemBinding is null || iItemBinding == previousRootItem)
+				{
+					string	componentName = baseName(stripExtension(path));
+					throw new Exception(format("\"%s\" component has no root item", componentName));
 				}
 
-				lua_pushvalue(L, -3);
-
-				lua_settable(L, -3);
+				string	componentId;
+				lua_pushstring(L, "id");
+				lua_gettable(L, -2);
+				if (lua_isnil(L, -1) == false)
+					componentId = to!(string)(lua_tostring(L, -1));
 				lua_pop(L, 1);
+
+				iItemBinding.valuesFromLuaTable(L);
+				iItemBinding.pushToLua(L);
+
+				// Set global from id
+				if (componentId != "")
+				{
+					// Get _ENV
+					lua_rawgeti(L, LUA_REGISTRYINDEX, dmlEngine.currentLuaEnv);
+					lua_pushstring(L, componentId.toStringz());
+
+					{ // Check for id conflict
+						lua_pushvalue(L, -1);
+						lua_rawget(L, -3); // Raw get without calling index metamethod to not get parent components values
+						if (lua_isnil(L, -1) == false)
+							throw new Exception(format("an item with id \"%s\" already exist in that component", componentId));
+						lua_pop(L, 1);
+					}
+
+					lua_pushvalue(L, -3);
+
+					lua_settable(L, -3);
+					lua_pop(L, 1);
+				}
 			}
 
 			return 1;
+		}
+		catch (AssertError e)
+		{
+			luaError(L, format("%s(%d): %s", e.file, e.line, e.msg));
+			return 0;
 		}
 		catch (Throwable e)
 		{
@@ -958,6 +1006,11 @@ extern(C)
 
 			return 1;
 		}
+		catch (AssertError e)
+		{
+			luaError(L, format("%s(%d): %s", e.file, e.line, e.msg));
+			return 0;
+		}
 		catch (Throwable e)
 		{
 			luaError(L, e.msg);
@@ -1001,6 +1054,11 @@ extern(C)
 			dquick.script.utils.valueFromLua!(typeof(value))(L, 3, value);
 			array[key] = value;
 
+			return 0;
+		}
+		catch (AssertError e)
+		{
+			luaError(L, format("%s(%d): %s", e.file, e.line, e.msg));
 			return 0;
 		}
 		catch (Throwable e)
