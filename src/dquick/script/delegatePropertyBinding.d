@@ -78,6 +78,8 @@ class DelegatePropertyBinding(ValueType, ItemType, string PropertyName) : Native
 						}
 					}
 				}
+				itemBinding.dmlEngine.__beginExecution();
+				scope(exit) itemBinding.dmlEngine.__endExecution();
 				itemBinding.dmlEngine.__luaPCall(params.length);
 
 				if (lua_gettop(luaState) - top != 1)

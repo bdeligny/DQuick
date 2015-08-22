@@ -175,7 +175,6 @@ public:
 		__load(text, filePath);
 		__hotReload();
 		lua_pop(luaState, 1);
-		mExecutionStack.length--;
 	}
 
 	/// Load lua code as if it was a file without executing it, usefull to create a component without writing it in a real file. Update already instanciated components in case of reload
@@ -184,7 +183,6 @@ public:
 		__load(text, filePath);
 		__hotReload();
 		lua_pop(luaState, 1);
-		mExecutionStack.length--;
 	}
 
 	T	rootItemBinding(T)()
@@ -279,9 +277,6 @@ public:
 
 		lua_pushvalue(luaState, -1);// To compensate the value poped by luaL_ref
 		mFiles[filePath] = luaL_ref(luaState, LUA_REGISTRYINDEX);
-
-		mExecutionStack.length++;
-		currentExecution.loadedFilePath = filePath;
 	}
 
 	/// Analyze the previously reloaded lua code and do the hot-reload of items. Private API
@@ -292,6 +287,8 @@ public:
 		mReloading = true;
 		scope(exit)	mReloading = reloading;
 		lua_pushvalue(luaState, -1);// To compensate the value poped by lua_pcall
+		__beginExecution();
+		scope(exit) __endExecution();
 		if (lua_pcall(luaState, 0, LUA_MULTRET, 0) != LUA_OK)
 		{
 			string error = to!(string)(lua_tostring(luaState, -1));
@@ -338,7 +335,7 @@ public:
 								writefln("reload %s", newId);
 								foreach (item; mItems)
 								{
-									//item.replaceShallow(oldShallow, newShallow);
+									item.replaceShallow(oldShallow, newShallow);
 								}
 							}
 						}
@@ -349,13 +346,6 @@ public:
 
 				lua_pop(luaState, 2); // Pop newId and newShallow 
 			}
-			*ptr = currentExecution.newShallowItems;
-			currentExecution.newShallowItems.clear();
-		}
-		else
-		{
-			mShallowItems[currentExecution.loadedFilePath] = currentExecution.newShallowItems;
-			currentExecution.newShallowItems.clear();
 		}
 	}
 
@@ -384,7 +374,8 @@ public:
 	/// Execute lua code already on the stack. Private API
 	void	__execute()
 	{
-		scope(exit) mExecutionStack.length--;
+		__beginExecution();
+		scope(exit) __endExecution();
 
 		assert(isCreated());
 
@@ -392,12 +383,24 @@ public:
 			writeln("execute: CREATE ==================================================================================================");
 
 		mRootItemBinding = __luaPCall(0);
+	}
+
+	void	__beginExecution()
+	{
+		mExecutionStack.length++;
+	}
+
+	void	__endExecution()
+	{
+		assert(mExecutionStack.length != 0);
+		assert(!(currentExecution.newShallowItems.length != 0 && currentExecution.loadedFilePath == ""));
 
 		auto ptr = currentExecution.loadedFilePath in mShallowItems;
 		if (ptr)
-			*ptr = currentExecution.newShallowItems;
+			*ptr ~= currentExecution.newShallowItems;
 		else
 			mShallowItems[currentExecution.loadedFilePath] = currentExecution.newShallowItems;
+		mExecutionStack.length--;
 	}
 
 	dquick.script.iItemBinding.IItemBinding		__luaPCall(int paramCount)
@@ -423,6 +426,8 @@ public:
 
 	ref Execution		currentExecution()
 	{
+		if (mExecutionStack.length <= 0)
+		int toto = 10;
 		assert(mExecutionStack.length > 0);
 		return mExecutionStack[mExecutionStack.length - 1];
 	}
@@ -437,8 +442,6 @@ protected:
 		if (luaRef != null)
 		{
 			lua_rawgeti(luaState, LUA_REGISTRYINDEX, *luaRef);
-			mExecutionStack.length++;
-			currentExecution.loadedFilePath = filePath;
 		}
 		else
 		{
@@ -509,7 +512,17 @@ extern(C)
 
 			// Save the shallow for reloading
 			lua_pushvalue(L, -1);// To compensate the value poped by luaL_ref
-			dmlEngine.currentExecution.newShallowItems ~= luaL_ref(L, LUA_REGISTRYINDEX);
+			int	shallowRef = luaL_ref(L, LUA_REGISTRYINDEX);
+			lua_Debug ar;
+			assert(lua_getstack(L, 1, &ar) != 0);
+			// Get source path
+			lua_getinfo(L, "S", &ar);  /* get info about it */
+			string	filePath = to!(string)(ar.source);
+			if (!(dmlEngine.currentExecution.loadedFilePath == "" || dmlEngine.currentExecution.loadedFilePath == filePath))
+				int toto;
+			assert(dmlEngine.currentExecution.loadedFilePath == "" || dmlEngine.currentExecution.loadedFilePath == filePath);
+			dmlEngine.currentExecution.loadedFilePath = filePath;
+			dmlEngine.currentExecution.newShallowItems ~= shallowRef;
 
 			if (dmlEngine.reloading) // Only store and return the args table for hot-reloading
 			{
@@ -525,6 +538,7 @@ extern(C)
 				(cast(IItemBinding)(itemBinding)).valuesFromLuaTable(L);
 
 				dquick.script.utils.valueToLua!T(L, itemBinding);
+				itemBinding.addShallow(shallowRef);
 
 				// Set global from id
 				if (itemBinding.id != "")
@@ -843,7 +857,15 @@ extern(C)
 
 			// Save the shallow for reloading
 			lua_pushvalue(L, -1);// To compensate the value poped by luaL_ref
-			dmlEngine.currentExecution.newShallowItems ~= luaL_ref(L, LUA_REGISTRYINDEX);
+			int	shallowRef = luaL_ref(L, LUA_REGISTRYINDEX);
+			lua_Debug ar;
+			assert(lua_getstack(L, 1, &ar) != 0);
+			// Get source path
+			lua_getinfo(L, "S", &ar);  /* get info about it */
+			string	filePath = to!(string)(ar.source);
+			assert(dmlEngine.currentExecution.loadedFilePath == "" || dmlEngine.currentExecution.loadedFilePath == filePath);
+			dmlEngine.currentExecution.loadedFilePath = filePath;
+			dmlEngine.currentExecution.newShallowItems ~= shallowRef;
 
 			if (dmlEngine.reloading) // Only store and return the args table for hot-reloading
 			{
@@ -916,6 +938,7 @@ extern(C)
 				lua_pop(L, 1);
 
 				iItemBinding.valuesFromLuaTable(L);
+				iItemBinding.addShallow(shallowRef);
 				iItemBinding.pushToLua(L);
 
 				// Set global from id

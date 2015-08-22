@@ -383,6 +383,90 @@ static string	BASE_ITEM_BINDING()
 		{
 			return mItemBindingLuaEnvDummyClosureReference;
 		}
+
+		static if (__traits(hasMember, typeof(this), "mShallows") == false)
+			int[]	mShallows;
+		override void	addShallow(int shallowRef)
+		{
+			mShallows ~= shallowRef;
+		}
+		override void	replaceShallow(int oldShallow, int newShallow)
+		{
+			for (int i = 0; i < mShallows.length; i++)
+			{
+				int	shallow = mShallows[i];
+				if (shallow == oldShallow)
+				{
+					mShallows[i] = newShallow;
+
+					// Get the old shallow table onto the stack
+					lua_rawgeti(dmlEngine.luaState, LUA_REGISTRYINDEX, oldShallow);
+					assert(lua_istable(dmlEngine.luaState, -1));
+
+					// Get the new shallow table onto the stack
+					lua_rawgeti(dmlEngine.luaState, LUA_REGISTRYINDEX, newShallow);
+					assert(lua_istable(dmlEngine.luaState, -1));
+
+					/* table is in the stack at index 't' */
+					lua_pushnil(dmlEngine.luaState);  /* first key */
+					while (lua_next(dmlEngine.luaState, -2) != 0) {
+						/* uses 'key' (at index -2) and 'value' (at index -1) */
+
+						// Copy the key on top of the stack
+						lua_pushvalue(dmlEngine.luaState, -2);
+
+						// Get the value of key from the old shallow
+						lua_rawget(dmlEngine.luaState, -5);
+
+						if (lua_rawequal(dmlEngine.luaState, -1, -2) == false) // Value is differente between old shallow and new shallow, we must update the item
+						{
+							lua_pop(dmlEngine.luaState, 1); // Pop the value
+
+							// Verify that the property is not overrided by another shallow
+							bool overrided = false;
+							for (int j = i + 1; j < mShallows.length; j++)
+							{
+								// Get the shallow table onto the stack
+								lua_rawgeti(dmlEngine.luaState, LUA_REGISTRYINDEX, mShallows[j]);
+								assert(lua_istable(dmlEngine.luaState, -1));
+
+								// Copy the key on top of the stack
+								lua_pushvalue(dmlEngine.luaState, -3);
+
+								// Get the value of key from the shallow
+								lua_rawget(dmlEngine.luaState, -2);
+
+								if (lua_isnil(dmlEngine.luaState, -1) == false) // There is a property
+								{
+									lua_pop(dmlEngine.luaState, 2); // Pop the value and the table
+									overrided = true;
+									break;
+								}
+								else
+								{
+									lua_pop(dmlEngine.luaState, 2); // Pop the value and the table
+								}
+							}
+							if (overrided == false)
+							{
+								valueFromLua(dmlEngine.luaState);							
+							}
+						}
+						else // Value is the same between old shallow and new shallow, we do nothing
+						{
+							lua_pop(dmlEngine.luaState, 1); // Pop the value
+						}
+
+						/* removes 'value'; keeps 'key' for next iteration */
+						lua_pop(dmlEngine.luaState, 1);
+					}
+
+					lua_pop(dmlEngine.luaState, 2); // Remove new and old shallow tables
+
+					break;
+				}
+			}
+		}
 	)";
 }
 

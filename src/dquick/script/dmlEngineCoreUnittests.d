@@ -2731,16 +2731,13 @@ unittest
 		assert(dmlEngine.getLuaGlobal!Item("reloadingItem1").nativeTotalProperty == 300);
 	}
 
-	/+// Simulate a component reloading
+	// Simulate a component reloading
 	{
 		string	component = q"(
 			Item {
 				id = "reloadingComponentRoot",
 				virtualProperty = 600,
 				nativeProperty = 700,
-				nativeTotalProperty = function()
-					return virtualProperty
-				end
 			}
 		)";
 		dmlEngine.loadFile(component, "ReloadingComponent.lua");
@@ -2752,6 +2749,9 @@ unittest
 				ReloadingComponent {
 					id = "reloadingItem3",
 					nativeProperty = 710,
+					nativeTotalProperty = function()
+						return virtualProperty
+					end
 				},
 			}
 		)";
@@ -2764,11 +2764,11 @@ unittest
 				nativeProperty = 720,
 			}
 		)";
-		dmlEngine.loadFile(component, "ReloadingComponent.lua");
+		dmlEngine.loadFile(component2, "ReloadingComponent.lua");
 
 		assert(dmlEngine.getLuaGlobal!Item("reloadingItem3").nativeTotalProperty == 620);
 		assert(dmlEngine.getLuaGlobal!Item("reloadingItem3").nativeProperty == 710);
-	}+/
+	}
 
 	}
 	catch (Throwable e)

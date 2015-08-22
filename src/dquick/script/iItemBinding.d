@@ -18,6 +18,8 @@ interface IItemBinding {
 	void	valuesFromLuaTable(lua_State* L);
 	void	pushToLua(lua_State* L);
 	int		itemBindingLuaEnvDummyClosureReference();
+	void	addShallow(int shallowRef);
+	void	replaceShallow(int oldShallow, int newShallow);
 
 	string	id();
 }
