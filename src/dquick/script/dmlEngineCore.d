@@ -315,6 +315,7 @@ public:
 					string	newId;
 					dquick.script.utils.valueFromLua(luaState, -1, newId);
 
+					bool	found = false;
 					foreach (oldShallow; oldShallowItems)
 					{
 						// Get the shallow table onto the stack
@@ -337,10 +338,18 @@ public:
 								{
 									item.replaceShallow(oldShallow, newShallow);
 								}
+								found = true;
+								//break;
 							}
 						}
 
 						lua_pop(luaState, 2); // Pop oldId and oldShallow
+					}
+
+					// New shallow's id not found, it's a new item
+					if (found == false)
+					{
+						writefln("new item %s", newId);
 					}
 				}
 
@@ -518,14 +527,12 @@ extern(C)
 			// Get source path
 			lua_getinfo(L, "S", &ar);  /* get info about it */
 			string	filePath = to!(string)(ar.source);
-			if (!(dmlEngine.currentExecution.loadedFilePath == "" || dmlEngine.currentExecution.loadedFilePath == filePath))
-				int toto;
 			assert(dmlEngine.currentExecution.loadedFilePath == "" || dmlEngine.currentExecution.loadedFilePath == filePath);
 			dmlEngine.currentExecution.loadedFilePath = filePath;
-			dmlEngine.currentExecution.newShallowItems ~= shallowRef;
 
 			if (dmlEngine.reloading) // Only store and return the args table for hot-reloading
 			{
+				dmlEngine.currentExecution.newShallowItems ~= shallowRef;
 				lua_remove(L, -2); // Remove the self table and only return the args table
 			}
 			else
@@ -538,7 +545,6 @@ extern(C)
 				(cast(IItemBinding)(itemBinding)).valuesFromLuaTable(L);
 
 				dquick.script.utils.valueToLua!T(L, itemBinding);
-				itemBinding.addShallow(shallowRef);
 
 				// Set global from id
 				if (itemBinding.id != "")

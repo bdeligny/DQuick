@@ -725,7 +725,7 @@ unittest
 	dmlEngine.addObjectBindingType!(ListView1Component, "ListView1Component");
 	dmlEngine.addObjectBindingType!(ListView1ModelItem, "ListView1ModelItem");
 
-	// Test basic item
+	/+// Test basic item
 	string lua1 = q"(
 		Item {
 			id = "item1"
@@ -2707,7 +2707,7 @@ unittest
 		assert((cast(ListView1Component)(listView104.children[2])).name == "item142_2View");
 	}
 
-	// Simulate a simple reloading
+	// Simulate a simple reloading, changing properties on an identified item
 	{
 		string lua = q"(
 			Item {
@@ -2717,7 +2717,7 @@ unittest
 				nativeTotalProperty = 300
 			}
 		)";
-		dmlEngine.execute(lua, "Simulate a simple reloading");
+		dmlEngine.execute(lua, "Simulate a simple reloading, changing properties on an identified item");
 		lua = q"(
 			Item {
 				id = "reloadingItem1",
@@ -2726,27 +2726,27 @@ unittest
 				nativeTotalProperty = 300
 			}
 		)";
-		dmlEngine.loadFile(lua, "Simulate a simple reloading");
+		dmlEngine.loadFile(lua, "Simulate a simple reloading, changing properties on an identified item");
 		assert(dmlEngine.getLuaGlobal!Item("reloadingItem1").nativeProperty == 400);
 		assert(dmlEngine.getLuaGlobal!Item("reloadingItem1").nativeTotalProperty == 300);
 	}
 
-	// Simulate a component reloading
+	// Simulate a component reloading, changing properties on an identified item
 	{
 		string	component = q"(
 			Item {
-				id = "reloadingComponentRoot",
+				id = "reloadingComponentRoot2",
 				virtualProperty = 600,
 				nativeProperty = 700,
 			}
 		)";
-		dmlEngine.loadFile(component, "ReloadingComponent.lua");
+		dmlEngine.loadFile(component, "ReloadingComponent2.lua");
 
 		string lua = q"(
-			ImportComponent("ReloadingComponent.lua")
+			ImportComponent("ReloadingComponent2.lua")
 			Item {
 				id = "reloadingItem2",
-				ReloadingComponent {
+				ReloadingComponent2 {
 					id = "reloadingItem3",
 					nativeProperty = 710,
 					nativeTotalProperty = function()
@@ -2755,20 +2755,95 @@ unittest
 				},
 			}
 		)";
-		dmlEngine.execute(lua, "Simulate a component reloading");
+		dmlEngine.execute(lua, "Simulate a component reloading, changing properties on an identified item");
 
 		string	component2 = q"(
 			Item {
-				id = "reloadingComponentRoot",
+				id = "reloadingComponentRoot2",
 				virtualProperty = 620,
 				nativeProperty = 720,
 			}
 		)";
-		dmlEngine.loadFile(component2, "ReloadingComponent.lua");
+		dmlEngine.loadFile(component2, "ReloadingComponent2.lua");
 
 		assert(dmlEngine.getLuaGlobal!Item("reloadingItem3").nativeTotalProperty == 620);
 		assert(dmlEngine.getLuaGlobal!Item("reloadingItem3").nativeProperty == 710);
+	}+/
+
+	// Simulate a reloading with child
+	{
+		string lua = q"(
+			Item {
+				id = "reloadingItem4",
+				nativeProperty = 100,
+				virtualProperty = 200,
+				nativeTotalProperty = 300,
+
+				Item {
+					id = "reloadingItem5",
+					nativeProperty = 800,
+					virtualProperty = 400,
+					nativeTotalProperty = 600
+				}
+			}
+		)";
+		dmlEngine.execute(lua, "Simulate a reloading with child");
+		lua = q"(
+			Item {
+				id = "reloadingItem4",
+				nativeProperty = 400,
+				virtualProperty = 200,
+				nativeTotalProperty = 300,
+
+				Item {
+					id = "reloadingItem5",
+					nativeProperty = 900,
+					virtualProperty = 600,
+					nativeTotalProperty = 700
+				}
+			}
+		)";
+		dmlEngine.loadFile(lua, "Simulate a reloading with child");
+		assert(dmlEngine.getLuaGlobal!Item("reloadingItem4").nativeProperty == 400);
+		assert(dmlEngine.getLuaGlobal!Item("reloadingItem4").nativeTotalProperty == 300);
+		/*assert(dmlEngine.getLuaGlobal!Item("reloadingItem5"));
+		assert(dmlEngine.getLuaGlobal!Item("reloadingItem5").nativeProperty == 800);
+		assert(dmlEngine.getLuaGlobal!Item("reloadingItem5").nativeTotalProperty == 600);*/
 	}
+
+	/+// Simulate a simple reloading, adding an item
+	{
+		string lua = q"(
+			Item {
+				id = "reloadingItem4",
+				nativeProperty = 100,
+				virtualProperty = 200,
+				nativeTotalProperty = 300
+			}
+		)";
+		dmlEngine.execute(lua, "Simulate a simple reloading, adding an item");
+		lua = q"(
+			Item {
+				id = "reloadingItem4",
+				nativeProperty = 400,
+				virtualProperty = 200,
+				nativeTotalProperty = 300,
+
+				Item {
+					id = "reloadingItem5",
+					nativeProperty = 800,
+					virtualProperty = 400,
+					nativeTotalProperty = 600
+				}
+			}
+		)";
+		dmlEngine.loadFile(lua, "Simulate a simple reloading, adding an item");
+		assert(dmlEngine.getLuaGlobal!Item("reloadingItem4").nativeProperty == 400);
+		assert(dmlEngine.getLuaGlobal!Item("reloadingItem4").nativeTotalProperty == 300);
+		/*assert(dmlEngine.getLuaGlobal!Item("reloadingItem5"));
+		assert(dmlEngine.getLuaGlobal!Item("reloadingItem5").nativeProperty == 800);
+		assert(dmlEngine.getLuaGlobal!Item("reloadingItem5").nativeTotalProperty == 600);*/
+	}+/
 
 	}
 	catch (Throwable e)
